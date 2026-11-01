@@ -1,0 +1,56 @@
+{
+  "lock_version": "1.0.0",
+  "dataset_version": "v1",
+  "experiment_id": "level-2-train-v1",
+  "selection_basis": "Level 2 mean_validation_accuracy only",
+  "selection_metric": "mean_validation_accuracy",
+  "selected_model": "decision_tree",
+  "selected_validation_metrics": {
+    "mean_training_accuracy": 1.0,
+    "mean_validation_accuracy": 0.827084,
+    "validation_accuracy_std": 0.051833,
+    "generalization_gap": 0.172916
+  },
+  "majority_baseline_validation_metrics": {
+    "mean_training_accuracy": 0.704212,
+    "mean_validation_accuracy": 0.708333,
+    "validation_accuracy_std": 0.047871,
+    "generalization_gap": -0.004121
+  },
+  "level2_contract": {
+    "path": "artifacts/v1/level3_evaluation_contract.json",
+    "sha256": "f127ccff117e82e46b00446831272b5cb4cca959147f95f5d2fa59a14a4430c1"
+  },
+  "training_report": {
+    "path": "reports/v1/training_experiment.json",
+    "sha256": "20f4e33471c0de3cd0f8cd8d45af096ce5eb0f79f65b11293fb48be766303459"
+  },
+  "input_fingerprints": {
+    "train": {
+      "path": "data/v1/processed/train.csv",
+      "sha256": "7daacc7270362956a437c8374d42f43f1ac38b55a816eda69fbfa75af61eaf0d"
+    },
+    "schema": {
+      "path": "contracts/v1/schema_contract.json",
+      "sha256": "5da316b760ee5d3a5f6b02a6da52cd7c1b51186fce89755139e8cd85594cc1d2"
+    },
+    "preprocessing": {
+      "path": "artifacts/v1/preprocessing.json",
+      "sha256": "ec0fef42dc3bbced5025587942b859d420796790118c1c4c3049cd079b56aa10"
+    }
+  },
+  "model_artifacts": {
+    "decision_tree": {
+      "path": "models/v1/decision_tree.joblib",
+      "sha256": "c21e652a802a67ab933903fe6f6907ba0216d7108bb693f5d9bf48a6c0782140"
+    },
+    "majority_baseline": {
+      "path": "models/v1/majority_baseline.joblib",
+      "sha256": "8d68b55346b5ac11508506fdd408ba488c87591f881797ff2fcc8ad9d5770680"
+    }
+  },
+  "held_out_test_status": "not read during selection lock",
+  "test_metrics_available": false,
+  "selection_is_final": true,
+  "level2_selected_field": "decision_tree"
+}

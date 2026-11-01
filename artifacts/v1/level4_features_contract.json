@@ -1,0 +1,127 @@
+{
+  "handoff_version": "1.1.0",
+  "next_level": "Level 4: Features",
+  "source_dataset_version": "v1",
+  "recommended_next_dataset_version": "v2",
+  "evaluated_at_utc": "2026-11-01T21:37:51.910570+00:00",
+  "feature_columns": [
+    "weekly_km_to_date",
+    "sleep_hours_last_night",
+    "resting_hr_morning",
+    "soreness_score_evening",
+    "prior_injury"
+  ],
+  "target_column": "needs_recovery_next_day",
+  "group_column": "runner_id",
+  "locked_selection": {
+    "model": "decision_tree",
+    "selection_basis": "Level 2 mean_validation_accuracy only",
+    "selection_lock_path": "artifacts/v1/level3_selection_lock.json",
+    "selection_lock_sha256": "8c20c650959751b7603414e02cfef19f4f00898611630e249c3880100cd56e65"
+  },
+  "selected_model": {
+    "path": "models/v1/decision_tree.joblib",
+    "sha256": "c21e652a802a67ab933903fe6f6907ba0216d7108bb693f5d9bf48a6c0782140"
+  },
+  "holdout_policy": {
+    "holdout_consumed": true,
+    "marker_path": "artifacts/v1/holdout_consumed.json",
+    "marker_sha256": "ff9a303205756aee4975391cbde6a76763d045dc6623a742f93f6082379f1dd9",
+    "forbidden_future_uses": [
+      "feature_selection",
+      "threshold_tuning",
+      "model_comparison",
+      "model_selection"
+    ],
+    "required_level4_selection_data": "grouped validation predictions from training data only"
+  },
+  "evaluation_evidence": {
+    "json_report": {
+      "path": "reports/v1/level3_evaluation.json",
+      "sha256": "746656d0d916439f5c87dd2da32d20d9f32755e57df33f2a755a01a6b5e85c7d"
+    },
+    "markdown_report": {
+      "path": "reports/v1/level3_evaluation.md",
+      "sha256": "4863d78708132877d413f6036c65568b08c5d0ce443754b0f8125613a1ef2594"
+    },
+    "error_analysis": {
+      "path": "reports/v1/level3_errors.csv",
+      "sha256": "d495c37cc0c2a2b7767becb84824b3c30edd9e17776483bfbd74200295b815ee"
+    }
+  },
+  "selected_test_metrics": {
+    "accuracy": 0.8333333333333334,
+    "positive_class": {
+      "precision": 0.9130434782608695,
+      "recall": 0.84,
+      "f1": 0.875,
+      "support": 25
+    },
+    "class_support": {
+      "0": 11,
+      "1": 25
+    },
+    "confusion_matrix": {
+      "labels": [
+        0,
+        1
+      ],
+      "layout": "[[TN, FP], [FN, TP]]",
+      "matrix": [
+        [
+          9,
+          2
+        ],
+        [
+          4,
+          21
+        ]
+      ],
+      "true_negatives": 9,
+      "false_positives": 2,
+      "false_negatives": 4,
+      "true_positives": 21
+    }
+  },
+  "majority_baseline_test_metrics": {
+    "accuracy": 0.6944444444444444,
+    "positive_class": {
+      "precision": 0.6944444444444444,
+      "recall": 1.0,
+      "f1": 0.819672131147541,
+      "support": 25
+    },
+    "class_support": {
+      "0": 11,
+      "1": 25
+    },
+    "confusion_matrix": {
+      "labels": [
+        0,
+        1
+      ],
+      "layout": "[[TN, FP], [FN, TP]]",
+      "matrix": [
+        [
+          0,
+          11
+        ],
+        [
+          0,
+          25
+        ]
+      ],
+      "true_negatives": 0,
+      "false_positives": 11,
+      "false_negatives": 0,
+      "true_positives": 25
+    }
+  },
+  "limitations": [
+    "The runner records, readiness rule, and labels are synthetic educational constructs, not evidence about real physiology.",
+    "One finite v1 holdout does not prove performance across new populations, devices, seasons, or training plans.",
+    "Precision and recall depend on class prevalence and the operating threshold.",
+    "False positives and false negatives have no validated clinical or coaching cost in this synthetic task.",
+    "This evaluation supports an educational software-engineering claim, not a medical, safety, or causal claim."
+  ]
+}

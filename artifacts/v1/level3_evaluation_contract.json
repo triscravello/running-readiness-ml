@@ -1,0 +1,108 @@
+{
+  "contract_version": "1.0.0",
+  "experiment_id": "level-2-train-v1",
+  "dataset_version": "v1",
+  "schema_version": "1.0.0",
+  "input_fingerprints": {
+    "train": {
+      "path": "data/v1/processed/train.csv",
+      "sha256": "7daacc7270362956a437c8374d42f43f1ac38b55a816eda69fbfa75af61eaf0d"
+    },
+    "schema": {
+      "path": "contracts/v1/schema_contract.json",
+      "sha256": "5da316b760ee5d3a5f6b02a6da52cd7c1b51186fce89755139e8cd85594cc1d2"
+    },
+    "preprocessing": {
+      "path": "artifacts/v1/preprocessing.json",
+      "sha256": "ec0fef42dc3bbced5025587942b859d420796790118c1c4c3049cd079b56aa10"
+    }
+  },
+  "held_out_test_set": {
+    "path": "data/v1/processed/test.csv",
+    "status": "not loaded, fingerprinted, or scored in Level 2",
+    "reserved_for": "Level 3 Evaluate"
+  },
+  "feature_columns": [
+    "weekly_km_to_date",
+    "sleep_hours_last_night",
+    "resting_hr_morning",
+    "soreness_score_evening",
+    "prior_injury"
+  ],
+  "target_column": "needs_recovery_next_day",
+  "group_column": "runner_id",
+  "cross_validation": {
+    "method": "GroupKFold",
+    "n_splits": 4,
+    "shuffle": true,
+    "random_state": 42
+  },
+  "random_seeds": {
+    "group_kfold": 42,
+    "decision_tree": 42
+  },
+  "selected_model": "decision_tree",
+  "selected_hyperparameters": {
+    "random_state": 42
+  },
+  "models": {
+    "majority_baseline": {
+      "artifact_path": "models/v1/majority_baseline.joblib",
+      "pipeline_steps": [
+        "classifier"
+      ],
+      "hyperparameters": {
+        "strategy": "most_frequent"
+      },
+      "validation_metrics": {
+        "mean_training_accuracy": 0.704212,
+        "mean_validation_accuracy": 0.708333,
+        "validation_accuracy_std": 0.047871,
+        "generalization_gap": -0.004121
+      }
+    },
+    "logistic_regression": {
+      "artifact_path": "models/v1/logistic_regression.joblib",
+      "pipeline_steps": [
+        "scaler",
+        "classifier"
+      ],
+      "hyperparameters": {
+        "scaler": "StandardScaler",
+        "C": 1.0,
+        "solver": "lbfgs",
+        "max_iter": 1000
+      },
+      "validation_metrics": {
+        "mean_training_accuracy": 0.760073,
+        "mean_validation_accuracy": 0.720833,
+        "validation_accuracy_std": 0.084471,
+        "generalization_gap": 0.03924
+      }
+    },
+    "decision_tree": {
+      "artifact_path": "models/v1/decision_tree.joblib",
+      "pipeline_steps": [
+        "classifier"
+      ],
+      "hyperparameters": {
+        "random_state": 42
+      },
+      "validation_metrics": {
+        "mean_training_accuracy": 1.0,
+        "mean_validation_accuracy": 0.827084,
+        "validation_accuracy_std": 0.051833,
+        "generalization_gap": 0.172916
+      }
+    }
+  },
+  "runtime": {
+    "python": "3.15.1",
+    "numpy": "2.5.4",
+    "pandas": "3.1.0",
+    "scikit_learn": "1.9.1",
+    "joblib": "1.6.0"
+  },
+  "evaluation_rule": "Load a trusted Pipeline and call predict on test.csv without calling fit; record the first held-out metrics in Level 3.",
+  "persistence_warning": "Load joblib artifacts only from trusted sources."
+}

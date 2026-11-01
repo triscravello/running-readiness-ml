@@ -1,0 +1,98 @@
+{
+  "schema_version": "1.0.0",
+  "dataset_version": "v1",
+  "prediction_definition": {
+    "entity": "runner-day",
+    "prediction_timestamp": "20:00 local time on observation day D",
+    "target": "needs_recovery_next_day",
+    "prediction_horizon": "next calendar day D+1",
+    "target_available_timestamp": "08:00 local time on next calendar day D+1"
+  },
+  "primary_key": [
+    "runner_id",
+    "observation_date"
+  ],
+  "group_column": "runner_id",
+  "feature_columns": [
+    "weekly_km_to_date",
+    "sleep_hours_last_night",
+    "resting_hr_morning",
+    "soreness_score_evening",
+    "prior_injury"
+  ],
+  "target_column": "needs_recovery_next_day",
+  "required_columns": [
+    "runner_id",
+    "observation_date",
+    "prediction_timestamp",
+    "weekly_km_to_date",
+    "sleep_hours_last_night",
+    "resting_hr_morning",
+    "soreness_score_evening",
+    "prior_injury",
+    "needs_recovery_next_day",
+    "target_available_timestamp"
+  ],
+  "columns": [
+    {
+      "name": "runner_id",
+      "role": "group_identifier",
+      "data_type": "string",
+      "available_at_prediction": true
+    },
+    {
+      "name": "observation_date",
+      "role": "context",
+      "data_type": "string",
+      "available_at_prediction": true
+    },
+    {
+      "name": "prediction_timestamp",
+      "role": "context",
+      "data_type": "string",
+      "available_at_prediction": true
+    },
+    {
+      "name": "weekly_km_to_date",
+      "role": "feature",
+      "data_type": "float",
+      "available_at_prediction": true
+    },
+    {
+      "name": "sleep_hours_last_night",
+      "role": "feature",
+      "data_type": "float",
+      "available_at_prediction": true
+    },
+    {
+      "name": "resting_hr_morning",
+      "role": "feature",
+      "data_type": "float",
+      "available_at_prediction": true
+    },
+    {
+      "name": "soreness_score_evening",
+      "role": "feature",
+      "data_type": "float",
+      "available_at_prediction": true
+    },
+    {
+      "name": "prior_injury",
+      "role": "feature",
+      "data_type": "integer",
+      "available_at_prediction": true
+    },
+    {
+      "name": "needs_recovery_next_day",
+      "role": "target",
+      "data_type": "integer",
+      "available_at_prediction": false
+    },
+    {
+      "name": "target_available_timestamp",
+      "role": "target_metadata",
+      "data_type": "string",
+      "available_at_prediction": false
+    }
+  ]
+}

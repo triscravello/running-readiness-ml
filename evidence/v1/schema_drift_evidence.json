@@ -1,0 +1,22 @@
+{
+  "valid_batch": {
+    "accepted": true,
+    "validation": {
+      "valid": true,
+      "missing": [],
+      "unexpected": []
+    }
+  },
+  "malformed_batch": {
+    "rejected": true,
+    "validation": {
+      "valid": false,
+      "missing": [
+        "sleep_hours_last_night"
+      ],
+      "unexpected": [
+        "next_day_resting_hr"
+      ]
+    }
+  }
+}

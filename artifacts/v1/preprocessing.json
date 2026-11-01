@@ -1,0 +1,20 @@
+{
+  "artifact_version": "1.0.0",
+  "dataset_version": "v1",
+  "strategy": "mean imputation",
+  "fit_scope": "training runners only",
+  "feature_columns": [
+    "weekly_km_to_date",
+    "sleep_hours_last_night",
+    "resting_hr_morning",
+    "soreness_score_evening",
+    "prior_injury"
+  ],
+  "fill_values": {
+    "weekly_km_to_date": 32.64485981308411,
+    "sleep_hours_last_night": 6.735849056603773,
+    "resting_hr_morning": 51.00934579439252,
+    "soreness_score_evening": 5.140186915887851,
+    "prior_injury": 0.16666666666666666
+  }
+}

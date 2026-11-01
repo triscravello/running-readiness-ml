@@ -1,0 +1,369 @@
+{
+  "experiment_id": "level-2-train-v1",
+  "dataset_version": "v1",
+  "schema_version": "1.0.0",
+  "input_fingerprints": {
+    "train": {
+      "path": "data/v1/processed/train.csv",
+      "sha256": "7daacc7270362956a437c8374d42f43f1ac38b55a816eda69fbfa75af61eaf0d"
+    },
+    "schema": {
+      "path": "contracts/v1/schema_contract.json",
+      "sha256": "5da316b760ee5d3a5f6b02a6da52cd7c1b51186fce89755139e8cd85594cc1d2"
+    },
+    "preprocessing": {
+      "path": "artifacts/v1/preprocessing.json",
+      "sha256": "ec0fef42dc3bbced5025587942b859d420796790118c1c4c3049cd079b56aa10"
+    }
+  },
+  "training_data": {
+    "row_count": 108,
+    "runner_count": 18,
+    "class_counts": {
+      "0": 32,
+      "1": 76
+    }
+  },
+  "level_1_preprocessing": {
+    "strategy": "mean imputation",
+    "fit_scope": "training runners only",
+    "feature_columns": [
+      "weekly_km_to_date",
+      "sleep_hours_last_night",
+      "resting_hr_morning",
+      "soreness_score_evening",
+      "prior_injury"
+    ]
+  },
+  "held_out_test_set": {
+    "path": "data/v1/processed/test.csv",
+    "status": "not loaded, fingerprinted, or scored in Level 2",
+    "reserved_for": "Level 3 Evaluate"
+  },
+  "feature_columns": [
+    "weekly_km_to_date",
+    "sleep_hours_last_night",
+    "resting_hr_morning",
+    "soreness_score_evening",
+    "prior_injury"
+  ],
+  "target_column": "needs_recovery_next_day",
+  "group_column": "runner_id",
+  "cross_validation": {
+    "method": "GroupKFold",
+    "n_splits": 4,
+    "shuffle": true,
+    "random_state": 42,
+    "fold_manifest": [
+      {
+        "fold": 1,
+        "fit_rows": 78,
+        "validation_rows": 30,
+        "fit_runners": [
+          "runner-04",
+          "runner-06",
+          "runner-08",
+          "runner-11",
+          "runner-14",
+          "runner-15",
+          "runner-16",
+          "runner-18",
+          "runner-20",
+          "runner-21",
+          "runner-22",
+          "runner-23",
+          "runner-24"
+        ],
+        "validation_runners": [
+          "runner-02",
+          "runner-03",
+          "runner-05",
+          "runner-07",
+          "runner-13"
+        ],
+        "runner_overlap": []
+      },
+      {
+        "fold": 2,
+        "fit_rows": 78,
+        "validation_rows": 30,
+        "fit_runners": [
+          "runner-02",
+          "runner-03",
+          "runner-05",
+          "runner-06",
+          "runner-07",
+          "runner-08",
+          "runner-11",
+          "runner-13",
+          "runner-14",
+          "runner-15",
+          "runner-18",
+          "runner-21",
+          "runner-24"
+        ],
+        "validation_runners": [
+          "runner-04",
+          "runner-16",
+          "runner-20",
+          "runner-22",
+          "runner-23"
+        ],
+        "runner_overlap": []
+      },
+      {
+        "fold": 3,
+        "fit_rows": 84,
+        "validation_rows": 24,
+        "fit_runners": [
+          "runner-02",
+          "runner-03",
+          "runner-04",
+          "runner-05",
+          "runner-07",
+          "runner-08",
+          "runner-11",
+          "runner-13",
+          "runner-15",
+          "runner-16",
+          "runner-20",
+          "runner-21",
+          "runner-22",
+          "runner-23"
+        ],
+        "validation_runners": [
+          "runner-06",
+          "runner-14",
+          "runner-18",
+          "runner-24"
+        ],
+        "runner_overlap": []
+      },
+      {
+        "fold": 4,
+        "fit_rows": 84,
+        "validation_rows": 24,
+        "fit_runners": [
+          "runner-02",
+          "runner-03",
+          "runner-04",
+          "runner-05",
+          "runner-06",
+          "runner-07",
+          "runner-13",
+          "runner-14",
+          "runner-16",
+          "runner-18",
+          "runner-20",
+          "runner-22",
+          "runner-23",
+          "runner-24"
+        ],
+        "validation_runners": [
+          "runner-08",
+          "runner-11",
+          "runner-15",
+          "runner-21"
+        ],
+        "runner_overlap": []
+      }
+    ]
+  },
+  "model_settings": {
+    "majority_baseline": {
+      "pipeline_steps": [
+        "classifier"
+      ],
+      "hyperparameters": {
+        "strategy": "most_frequent"
+      }
+    },
+    "logistic_regression": {
+      "pipeline_steps": [
+        "scaler",
+        "classifier"
+      ],
+      "hyperparameters": {
+        "scaler": "StandardScaler",
+        "C": 1.0,
+        "solver": "lbfgs",
+        "max_iter": 1000
+      }
+    },
+    "decision_tree": {
+      "pipeline_steps": [
+        "classifier"
+      ],
+      "hyperparameters": {
+        "random_state": 42
+      }
+    }
+  },
+  "comparison_metric": "accuracy",
+  "results": {
+    "majority_baseline": {
+      "folds": [
+        {
+          "fold": 1,
+          "training_accuracy": 0.705128,
+          "validation_accuracy": 0.7,
+          "generalization_gap": 0.005128,
+          "unique_validation_predictions": [
+            1
+          ]
+        },
+        {
+          "fold": 2,
+          "training_accuracy": 0.730769,
+          "validation_accuracy": 0.633333,
+          "generalization_gap": 0.097436,
+          "unique_validation_predictions": [
+            1
+          ]
+        },
+        {
+          "fold": 3,
+          "training_accuracy": 0.690476,
+          "validation_accuracy": 0.75,
+          "generalization_gap": -0.059524,
+          "unique_validation_predictions": [
+            1
+          ]
+        },
+        {
+          "fold": 4,
+          "training_accuracy": 0.690476,
+          "validation_accuracy": 0.75,
+          "generalization_gap": -0.059524,
+          "unique_validation_predictions": [
+            1
+          ]
+        }
+      ],
+      "aggregate": {
+        "mean_training_accuracy": 0.704212,
+        "mean_validation_accuracy": 0.708333,
+        "validation_accuracy_std": 0.047871,
+        "generalization_gap": -0.004121
+      }
+    },
+    "logistic_regression": {
+      "folds": [
+        {
+          "fold": 1,
+          "training_accuracy": 0.75641,
+          "validation_accuracy": 0.7,
+          "generalization_gap": 0.05641,
+          "unique_validation_predictions": [
+            0,
+            1
+          ]
+        },
+        {
+          "fold": 2,
+          "training_accuracy": 0.807692,
+          "validation_accuracy": 0.6,
+          "generalization_gap": 0.207692,
+          "unique_validation_predictions": [
+            0,
+            1
+          ]
+        },
+        {
+          "fold": 3,
+          "training_accuracy": 0.714286,
+          "validation_accuracy": 0.75,
+          "generalization_gap": -0.035714,
+          "unique_validation_predictions": [
+            1
+          ]
+        },
+        {
+          "fold": 4,
+          "training_accuracy": 0.761905,
+          "validation_accuracy": 0.833333,
+          "generalization_gap": -0.071429,
+          "unique_validation_predictions": [
+            0,
+            1
+          ]
+        }
+      ],
+      "aggregate": {
+        "mean_training_accuracy": 0.760073,
+        "mean_validation_accuracy": 0.720833,
+        "validation_accuracy_std": 0.084471,
+        "generalization_gap": 0.03924
+      }
+    },
+    "decision_tree": {
+      "folds": [
+        {
+          "fold": 1,
+          "training_accuracy": 1.0,
+          "validation_accuracy": 0.8,
+          "generalization_gap": 0.2,
+          "unique_validation_predictions": [
+            0,
+            1
+          ]
+        },
+        {
+          "fold": 2,
+          "training_accuracy": 1.0,
+          "validation_accuracy": 0.8,
+          "generalization_gap": 0.2,
+          "unique_validation_predictions": [
+            0,
+            1
+          ]
+        },
+        {
+          "fold": 3,
+          "training_accuracy": 1.0,
+          "validation_accuracy": 0.916667,
+          "generalization_gap": 0.083333,
+          "unique_validation_predictions": [
+            0,
+            1
+          ]
+        },
+        {
+          "fold": 4,
+          "training_accuracy": 1.0,
+          "validation_accuracy": 0.791667,
+          "generalization_gap": 0.208333,
+          "unique_validation_predictions": [
+            0,
+            1
+          ]
+        }
+      ],
+      "aggregate": {
+        "mean_training_accuracy": 1.0,
+        "mean_validation_accuracy": 0.827084,
+        "validation_accuracy_std": 0.051833,
+        "generalization_gap": 0.172916
+      }
+    }
+  },
+  "selected_by_mean_validation_accuracy": "decision_tree",
+  "selected_hyperparameters": {
+    "random_state": 42
+  },
+  "final_fit_scope": "full Level 1 training partition only",
+  "model_artifacts": {
+    "majority_baseline": "models/v1/majority_baseline.joblib",
+    "logistic_regression": "models/v1/logistic_regression.joblib",
+    "decision_tree": "models/v1/decision_tree.joblib"
+  },
+  "runtime": {
+    "python": "3.15.1",
+    "numpy": "2.5.4",
+    "pandas": "3.1.0",
+    "scikit_learn": "1.9.1",
+    "joblib": "1.6.0"
+  },
+  "persistence_warning": "Load joblib artifacts only from trusted sources.",
+  "level3_contract_path": "artifacts/v1/level3_evaluation_contract.json"
+}

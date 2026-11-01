@@ -1,0 +1,829 @@
+{
+  "report_version": "1.1.0",
+  "dataset_version": "v1",
+  "selected_model": "decision_tree",
+  "test_set_status": "test.csv and held-out labels were not read",
+  "out_of_fold_source": "one probability per training row from its excluded group-safe validation fold",
+  "fold_evidence": [
+    {
+      "fold": 1,
+      "fit_runner_count": 13,
+      "validation_runner_count": 5,
+      "runner_overlap": [],
+      "validation_row_count": 30
+    },
+    {
+      "fold": 2,
+      "fit_runner_count": 13,
+      "validation_runner_count": 5,
+      "runner_overlap": [],
+      "validation_row_count": 30
+    },
+    {
+      "fold": 3,
+      "fit_runner_count": 14,
+      "validation_runner_count": 4,
+      "runner_overlap": [],
+      "validation_row_count": 24
+    },
+    {
+      "fold": 4,
+      "fit_runner_count": 14,
+      "validation_runner_count": 4,
+      "runner_overlap": [],
+      "validation_row_count": 24
+    }
+  ],
+  "out_of_fold_probabilities": [
+    {
+      "training_row_position": 0,
+      "runner_group": "runner-02",
+      "actual_class": 0,
+      "probability_class_1": 0.0
+    },
+    {
+      "training_row_position": 1,
+      "runner_group": "runner-02",
+      "actual_class": 1,
+      "probability_class_1": 0.0
+    },
+    {
+      "training_row_position": 2,
+      "runner_group": "runner-02",
+      "actual_class": 0,
+      "probability_class_1": 0.0
+    },
+    {
+      "training_row_position": 3,
+      "runner_group": "runner-02",
+      "actual_class": 1,
+      "probability_class_1": 1.0
+    },
+    {
+      "training_row_position": 4,
+      "runner_group": "runner-02",
+      "actual_class": 1,
+      "probability_class_1": 1.0
+    },
+    {
+      "training_row_position": 5,
+      "runner_group": "runner-02",
+      "actual_class": 1,
+      "probability_class_1": 1.0
+    },
+    {
+      "training_row_position": 6,
+      "runner_group": "runner-03",
+      "actual_class": 0,
+      "probability_class_1": 0.0
+    },
+    {
+      "training_row_position": 7,
+      "runner_group": "runner-03",
+      "actual_class": 1,
+      "probability_class_1": 1.0
+    },
+    {
+      "training_row_position": 8,
+      "runner_group": "runner-03",
+      "actual_class": 1,
+      "probability_class_1": 1.0
+    },
+    {
+      "training_row_position": 9,
+      "runner_group": "runner-03",
+      "actual_class": 1,
+      "probability_class_1": 1.0
+    },
+    {
+      "training_row_position": 10,
+      "runner_group": "runner-03",
+      "actual_class": 1,
+      "probability_class_1": 0.0
+    },
+    {
+      "training_row_position": 11,
+      "runner_group": "runner-03",
+      "actual_class": 0,
+      "probability_class_1": 0.0
+    },
+    {
+      "training_row_position": 12,
+      "runner_group": "runner-04",
+      "actual_class": 1,
+      "probability_class_1": 1.0
+    },
+    {
+      "training_row_position": 13,
+      "runner_group": "runner-04",
+      "actual_class": 1,
+      "probability_class_1": 1.0
+    },
+    {
+      "training_row_position": 14,
+      "runner_group": "runner-04",
+      "actual_class": 1,
+      "probability_class_1": 1.0
+    },
+    {
+      "training_row_position": 15,
+      "runner_group": "runner-04",
+      "actual_class": 0,
+      "probability_class_1": 1.0
+    },
+    {
+      "training_row_position": 16,
+      "runner_group": "runner-04",
+      "actual_class": 1,
+      "probability_class_1": 0.0
+    },
+    {
+      "training_row_position": 17,
+      "runner_group": "runner-04",
+      "actual_class": 0,
+      "probability_class_1": 0.0
+    },
+    {
+      "training_row_position": 18,
+      "runner_group": "runner-05",
+      "actual_class": 1,
+      "probability_class_1": 1.0
+    },
+    {
+      "training_row_position": 19,
+      "runner_group": "runner-05",
+      "actual_class": 1,
+      "probability_class_1": 1.0
+    },
+    {
+      "training_row_position": 20,
+      "runner_group": "runner-05",
+      "actual_class": 0,
+      "probability_class_1": 0.0
+    },
+    {
+      "training_row_position": 21,
+      "runner_group": "runner-05",
+      "actual_class": 0,
+      "probability_class_1": 1.0
+    },
+    {
+      "training_row_position": 22,
+      "runner_group": "runner-05",
+      "actual_class": 1,
+      "probability_class_1": 1.0
+    },
+    {
+      "training_row_position": 23,
+      "runner_group": "runner-05",
+      "actual_class": 1,
+      "probability_class_1": 1.0
+    },
+    {
+      "training_row_position": 24,
+      "runner_group": "runner-06",
+      "actual_class": 1,
+      "probability_class_1": 1.0
+    },
+    {
+      "training_row_position": 25,
+      "runner_group": "runner-06",
+      "actual_class": 1,
+      "probability_class_1": 1.0
+    },
+    {
+      "training_row_position": 26,
+      "runner_group": "runner-06",
+      "actual_class": 0,
+      "probability_class_1": 1.0
+    },
+    {
+      "training_row_position": 27,
+      "runner_group": "runner-06",
+      "actual_class": 0,
+      "probability_class_1": 0.0
+    },
+    {
+      "training_row_position": 28,
+      "runner_group": "runner-06",
+      "actual_class": 1,
+      "probability_class_1": 1.0
+    },
+    {
+      "training_row_position": 29,
+      "runner_group": "runner-06",
+      "actual_class": 1,
+      "probability_class_1": 1.0
+    },
+    {
+      "training_row_position": 30,
+      "runner_group": "runner-07",
+      "actual_class": 0,
+      "probability_class_1": 1.0
+    },
+    {
+      "training_row_position": 31,
+      "runner_group": "runner-07",
+      "actual_class": 1,
+      "probability_class_1": 1.0
+    },
+    {
+      "training_row_position": 32,
+      "runner_group": "runner-07",
+      "actual_class": 1,
+      "probability_class_1": 1.0
+    },
+    {
+      "training_row_position": 33,
+      "runner_group": "runner-07",
+      "actual_class": 1,
+      "probability_class_1": 1.0
+    },
+    {
+      "training_row_position": 34,
+      "runner_group": "runner-07",
+      "actual_class": 1,
+      "probability_class_1": 1.0
+    },
+    {
+      "training_row_position": 35,
+      "runner_group": "runner-07",
+      "actual_class": 1,
+      "probability_class_1": 1.0
+    },
+    {
+      "training_row_position": 36,
+      "runner_group": "runner-08",
+      "actual_class": 0,
+      "probability_class_1": 1.0
+    },
+    {
+      "training_row_position": 37,
+      "runner_group": "runner-08",
+      "actual_class": 1,
+      "probability_class_1": 1.0
+    },
+    {
+      "training_row_position": 38,
+      "runner_group": "runner-08",
+      "actual_class": 1,
+      "probability_class_1": 1.0
+    },
+    {
+      "training_row_position": 39,
+      "runner_group": "runner-08",
+      "actual_class": 1,
+      "probability_class_1": 1.0
+    },
+    {
+      "training_row_position": 40,
+      "runner_group": "runner-08",
+      "actual_class": 1,
+      "probability_class_1": 1.0
+    },
+    {
+      "training_row_position": 41,
+      "runner_group": "runner-08",
+      "actual_class": 0,
+      "probability_class_1": 1.0
+    },
+    {
+      "training_row_position": 42,
+      "runner_group": "runner-11",
+      "actual_class": 1,
+      "probability_class_1": 1.0
+    },
+    {
+      "training_row_position": 43,
+      "runner_group": "runner-11",
+      "actual_class": 1,
+      "probability_class_1": 1.0
+    },
+    {
+      "training_row_position": 44,
+      "runner_group": "runner-11",
+      "actual_class": 0,
+      "probability_class_1": 0.0
+    },
+    {
+      "training_row_position": 45,
+      "runner_group": "runner-11",
+      "actual_class": 0,
+      "probability_class_1": 0.0
+    },
+    {
+      "training_row_position": 46,
+      "runner_group": "runner-11",
+      "actual_class": 1,
+      "probability_class_1": 0.0
+    },
+    {
+      "training_row_position": 47,
+      "runner_group": "runner-11",
+      "actual_class": 1,
+      "probability_class_1": 1.0
+    },
+    {
+      "training_row_position": 48,
+      "runner_group": "runner-13",
+      "actual_class": 0,
+      "probability_class_1": 1.0
+    },
+    {
+      "training_row_position": 49,
+      "runner_group": "runner-13",
+      "actual_class": 1,
+      "probability_class_1": 0.0
+    },
+    {
+      "training_row_position": 50,
+      "runner_group": "runner-13",
+      "actual_class": 0,
+      "probability_class_1": 0.0
+    },
+    {
+      "training_row_position": 51,
+      "runner_group": "runner-13",
+      "actual_class": 1,
+      "probability_class_1": 1.0
+    },
+    {
+      "training_row_position": 52,
+      "runner_group": "runner-13",
+      "actual_class": 1,
+      "probability_class_1": 1.0
+    },
+    {
+      "training_row_position": 53,
+      "runner_group": "runner-13",
+      "actual_class": 1,
+      "probability_class_1": 1.0
+    },
+    {
+      "training_row_position": 54,
+      "runner_group": "runner-14",
+      "actual_class": 1,
+      "probability_class_1": 1.0
+    },
+    {
+      "training_row_position": 55,
+      "runner_group": "runner-14",
+      "actual_class": 1,
+      "probability_class_1": 1.0
+    },
+    {
+      "training_row_position": 56,
+      "runner_group": "runner-14",
+      "actual_class": 1,
+      "probability_class_1": 1.0
+    },
+    {
+      "training_row_position": 57,
+      "runner_group": "runner-14",
+      "actual_class": 1,
+      "probability_class_1": 1.0
+    },
+    {
+      "training_row_position": 58,
+      "runner_group": "runner-14",
+      "actual_class": 1,
+      "probability_class_1": 1.0
+    },
+    {
+      "training_row_position": 59,
+      "runner_group": "runner-14",
+      "actual_class": 0,
+      "probability_class_1": 0.0
+    },
+    {
+      "training_row_position": 60,
+      "runner_group": "runner-15",
+      "actual_class": 1,
+      "probability_class_1": 1.0
+    },
+    {
+      "training_row_position": 61,
+      "runner_group": "runner-15",
+      "actual_class": 1,
+      "probability_class_1": 1.0
+    },
+    {
+      "training_row_position": 62,
+      "runner_group": "runner-15",
+      "actual_class": 1,
+      "probability_class_1": 1.0
+    },
+    {
+      "training_row_position": 63,
+      "runner_group": "runner-15",
+      "actual_class": 1,
+      "probability_class_1": 1.0
+    },
+    {
+      "training_row_position": 64,
+      "runner_group": "runner-15",
+      "actual_class": 1,
+      "probability_class_1": 1.0
+    },
+    {
+      "training_row_position": 65,
+      "runner_group": "runner-15",
+      "actual_class": 0,
+      "probability_class_1": 0.0
+    },
+    {
+      "training_row_position": 66,
+      "runner_group": "runner-16",
+      "actual_class": 0,
+      "probability_class_1": 1.0
+    },
+    {
+      "training_row_position": 67,
+      "runner_group": "runner-16",
+      "actual_class": 1,
+      "probability_class_1": 1.0
+    },
+    {
+      "training_row_position": 68,
+      "runner_group": "runner-16",
+      "actual_class": 1,
+      "probability_class_1": 1.0
+    },
+    {
+      "training_row_position": 69,
+      "runner_group": "runner-16",
+      "actual_class": 0,
+      "probability_class_1": 1.0
+    },
+    {
+      "training_row_position": 70,
+      "runner_group": "runner-16",
+      "actual_class": 1,
+      "probability_class_1": 0.0
+    },
+    {
+      "training_row_position": 71,
+      "runner_group": "runner-16",
+      "actual_class": 0,
+      "probability_class_1": 0.0
+    },
+    {
+      "training_row_position": 72,
+      "runner_group": "runner-18",
+      "actual_class": 1,
+      "probability_class_1": 1.0
+    },
+    {
+      "training_row_position": 73,
+      "runner_group": "runner-18",
+      "actual_class": 1,
+      "probability_class_1": 1.0
+    },
+    {
+      "training_row_position": 74,
+      "runner_group": "runner-18",
+      "actual_class": 0,
+      "probability_class_1": 1.0
+    },
+    {
+      "training_row_position": 75,
+      "runner_group": "runner-18",
+      "actual_class": 0,
+      "probability_class_1": 0.0
+    },
+    {
+      "training_row_position": 76,
+      "runner_group": "runner-18",
+      "actual_class": 1,
+      "probability_class_1": 1.0
+    },
+    {
+      "training_row_position": 77,
+      "runner_group": "runner-18",
+      "actual_class": 1,
+      "probability_class_1": 1.0
+    },
+    {
+      "training_row_position": 78,
+      "runner_group": "runner-20",
+      "actual_class": 1,
+      "probability_class_1": 1.0
+    },
+    {
+      "training_row_position": 79,
+      "runner_group": "runner-20",
+      "actual_class": 1,
+      "probability_class_1": 1.0
+    },
+    {
+      "training_row_position": 80,
+      "runner_group": "runner-20",
+      "actual_class": 1,
+      "probability_class_1": 1.0
+    },
+    {
+      "training_row_position": 81,
+      "runner_group": "runner-20",
+      "actual_class": 1,
+      "probability_class_1": 1.0
+    },
+    {
+      "training_row_position": 82,
+      "runner_group": "runner-20",
+      "actual_class": 1,
+      "probability_class_1": 1.0
+    },
+    {
+      "training_row_position": 83,
+      "runner_group": "runner-20",
+      "actual_class": 0,
+      "probability_class_1": 0.0
+    },
+    {
+      "training_row_position": 84,
+      "runner_group": "runner-21",
+      "actual_class": 1,
+      "probability_class_1": 1.0
+    },
+    {
+      "training_row_position": 85,
+      "runner_group": "runner-21",
+      "actual_class": 1,
+      "probability_class_1": 0.0
+    },
+    {
+      "training_row_position": 86,
+      "runner_group": "runner-21",
+      "actual_class": 1,
+      "probability_class_1": 1.0
+    },
+    {
+      "training_row_position": 87,
+      "runner_group": "runner-21",
+      "actual_class": 1,
+      "probability_class_1": 1.0
+    },
+    {
+      "training_row_position": 88,
+      "runner_group": "runner-21",
+      "actual_class": 1,
+      "probability_class_1": 0.0
+    },
+    {
+      "training_row_position": 89,
+      "runner_group": "runner-21",
+      "actual_class": 0,
+      "probability_class_1": 0.0
+    },
+    {
+      "training_row_position": 90,
+      "runner_group": "runner-22",
+      "actual_class": 0,
+      "probability_class_1": 0.0
+    },
+    {
+      "training_row_position": 91,
+      "runner_group": "runner-22",
+      "actual_class": 1,
+      "probability_class_1": 1.0
+    },
+    {
+      "training_row_position": 92,
+      "runner_group": "runner-22",
+      "actual_class": 1,
+      "probability_class_1": 1.0
+    },
+    {
+      "training_row_position": 93,
+      "runner_group": "runner-22",
+      "actual_class": 0,
+      "probability_class_1": 0.0
+    },
+    {
+      "training_row_position": 94,
+      "runner_group": "runner-22",
+      "actual_class": 1,
+      "probability_class_1": 0.0
+    },
+    {
+      "training_row_position": 95,
+      "runner_group": "runner-22",
+      "actual_class": 0,
+      "probability_class_1": 0.0
+    },
+    {
+      "training_row_position": 96,
+      "runner_group": "runner-23",
+      "actual_class": 1,
+      "probability_class_1": 1.0
+    },
+    {
+      "training_row_position": 97,
+      "runner_group": "runner-23",
+      "actual_class": 1,
+      "probability_class_1": 1.0
+    },
+    {
+      "training_row_position": 98,
+      "runner_group": "runner-23",
+      "actual_class": 0,
+      "probability_class_1": 0.0
+    },
+    {
+      "training_row_position": 99,
+      "runner_group": "runner-23",
+      "actual_class": 0,
+      "probability_class_1": 0.0
+    },
+    {
+      "training_row_position": 100,
+      "runner_group": "runner-23",
+      "actual_class": 1,
+      "probability_class_1": 1.0
+    },
+    {
+      "training_row_position": 101,
+      "runner_group": "runner-23",
+      "actual_class": 1,
+      "probability_class_1": 1.0
+    },
+    {
+      "training_row_position": 102,
+      "runner_group": "runner-24",
+      "actual_class": 1,
+      "probability_class_1": 1.0
+    },
+    {
+      "training_row_position": 103,
+      "runner_group": "runner-24",
+      "actual_class": 1,
+      "probability_class_1": 1.0
+    },
+    {
+      "training_row_position": 104,
+      "runner_group": "runner-24",
+      "actual_class": 0,
+      "probability_class_1": 0.0
+    },
+    {
+      "training_row_position": 105,
+      "runner_group": "runner-24",
+      "actual_class": 1,
+      "probability_class_1": 1.0
+    },
+    {
+      "training_row_position": 106,
+      "runner_group": "runner-24",
+      "actual_class": 1,
+      "probability_class_1": 1.0
+    },
+    {
+      "training_row_position": 107,
+      "runner_group": "runner-24",
+      "actual_class": 1,
+      "probability_class_1": 1.0
+    }
+  ],
+  "threshold_roles": {
+    "held_out_evaluation_operating_point": "frozen Pipeline.predict default rule",
+    "exploratory_analysis": "all five threshold rows",
+    "validation_selected_operating_threshold": "highest out-of-fold validation F1 with ties toward 0.50",
+    "threshold_applied_to_holdout": false
+  },
+  "exploratory_threshold_results": [
+    {
+      "role": "exploratory_threshold",
+      "threshold": 0.3,
+      "precision": 0.8701298701298701,
+      "recall": 0.881578947368421,
+      "f1": 0.8758169934640523,
+      "predicted_positive_count": 77,
+      "true_negative_count": 22,
+      "false_positive_count": 10,
+      "false_negative_count": 9,
+      "true_positive_count": 67,
+      "confusion_matrix": [
+        [
+          22,
+          10
+        ],
+        [
+          9,
+          67
+        ]
+      ]
+    },
+    {
+      "role": "exploratory_threshold",
+      "threshold": 0.4,
+      "precision": 0.8701298701298701,
+      "recall": 0.881578947368421,
+      "f1": 0.8758169934640523,
+      "predicted_positive_count": 77,
+      "true_negative_count": 22,
+      "false_positive_count": 10,
+      "false_negative_count": 9,
+      "true_positive_count": 67,
+      "confusion_matrix": [
+        [
+          22,
+          10
+        ],
+        [
+          9,
+          67
+        ]
+      ]
+    },
+    {
+      "role": "exploratory_threshold",
+      "threshold": 0.5,
+      "precision": 0.8701298701298701,
+      "recall": 0.881578947368421,
+      "f1": 0.8758169934640523,
+      "predicted_positive_count": 77,
+      "true_negative_count": 22,
+      "false_positive_count": 10,
+      "false_negative_count": 9,
+      "true_positive_count": 67,
+      "confusion_matrix": [
+        [
+          22,
+          10
+        ],
+        [
+          9,
+          67
+        ]
+      ]
+    },
+    {
+      "role": "exploratory_threshold",
+      "threshold": 0.6,
+      "precision": 0.8701298701298701,
+      "recall": 0.881578947368421,
+      "f1": 0.8758169934640523,
+      "predicted_positive_count": 77,
+      "true_negative_count": 22,
+      "false_positive_count": 10,
+      "false_negative_count": 9,
+      "true_positive_count": 67,
+      "confusion_matrix": [
+        [
+          22,
+          10
+        ],
+        [
+          9,
+          67
+        ]
+      ]
+    },
+    {
+      "role": "exploratory_threshold",
+      "threshold": 0.7,
+      "precision": 0.8701298701298701,
+      "recall": 0.881578947368421,
+      "f1": 0.8758169934640523,
+      "predicted_positive_count": 77,
+      "true_negative_count": 22,
+      "false_positive_count": 10,
+      "false_negative_count": 9,
+      "true_positive_count": 67,
+      "confusion_matrix": [
+        [
+          22,
+          10
+        ],
+        [
+          9,
+          67
+        ]
+      ]
+    }
+  ],
+  "validation_selected_operating_threshold_proposal": {
+    "role": "validation_selected_operating_threshold_proposal",
+    "threshold": 0.5,
+    "precision": 0.8701298701298701,
+    "recall": 0.881578947368421,
+    "f1": 0.8758169934640523,
+    "predicted_positive_count": 77,
+    "true_negative_count": 22,
+    "false_positive_count": 10,
+    "false_negative_count": 9,
+    "true_positive_count": 67,
+    "confusion_matrix": [
+      [
+        22,
+        10
+      ],
+      [
+        9,
+        67
+      ]
+    ],
+    "selection_data": "group-safe out-of-fold training validation predictions only"
+  },
+  "usage_rule": "Do not apply this proposal to the consumed v1 holdout for another evaluation."
+}

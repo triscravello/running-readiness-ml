@@ -1,0 +1,35 @@
+# Python environments and cache
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# macOS and VS Code
+.DS_Store
+.vscode/
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Local datasets
+data/v1/raw/
+data/v1/cleaned/
+data/v1/processed/
+
+# Consumed holdout and evaluation evidence
+artifacts/v1/holdout_consumed.json
+reports/v1/level3_errors.csv
+reports/v1/level3_evaluation.json
+reports/v1/level3_evaluation.md
+
+# Serialized models
+models/v1/*.joblib
+
+# Temporary evidence bundles
+level4-evidence/
+level4-evidence.zip
