@@ -1,0 +1,510 @@
+{
+  "audit": {
+    "audit_status": "passed",
+    "development_only": true,
+    "evaluation_report": {
+      "path": "reports/v1/level3_evaluation.json",
+      "sha256": "746656d0d916439f5c87dd2da32d20d9f32755e57df33f2a755a01a6b5e85c7d"
+    },
+    "forbidden_holdout_uses": [
+      "feature_selection",
+      "model_comparison",
+      "model_selection",
+      "threshold_tuning"
+    ],
+    "holdout_consumed": true,
+    "holdout_marker": {
+      "path": "artifacts/v1/holdout_consumed.json",
+      "sha256": "ff9a303205756aee4975391cbde6a76763d045dc6623a742f93f6082379f1dd9"
+    },
+    "holdout_read": false,
+    "preprocessing": {
+      "inherited_fit_scope": "training runners only",
+      "path": "artifacts/v1/preprocessing.json",
+      "sha256": "ec0fef42dc3bbced5025587942b859d420796790118c1c4c3049cd079b56aa10"
+    },
+    "schema": {
+      "path": "contracts/v1/schema_contract.json",
+      "sha256": "5da316b760ee5d3a5f6b02a6da52cd7c1b51186fce89755139e8cd85594cc1d2"
+    },
+    "selection_lock": {
+      "path": "artifacts/v1/level3_selection_lock.json",
+      "sha256": "8c20c650959751b7603414e02cfef19f4f00898611630e249c3880100cd56e65"
+    },
+    "training_data": {
+      "path": "data/v1/processed/train.csv",
+      "sha256": "7daacc7270362956a437c8374d42f43f1ac38b55a816eda69fbfa75af61eaf0d"
+    }
+  },
+  "consumed_v1_holdout_read": false,
+  "cross_validation": {
+    "identical_fold_signatures": [
+      "3fb529d77e70d3b7805cc7a955fdad7f1826a466252ee1d29aff3217d6b38274",
+      "8d47568662909c8c67d9cfcdb40814ecd29596cb39c6ec1c230300e6b1eeec39",
+      "222efb220522e980a87b5fc71393ad728b90cf40e18eb4fcac056067787a3d0a",
+      "191f175ab2403f13601654df35c8e22b0d1ad3d98201e7ee003e30091f5ea6cb"
+    ],
+    "method": "GroupKFold",
+    "n_splits": 4,
+    "selection_data": "v1 development rows only"
+  },
+  "development_only": true,
+  "engineered_minus_raw_validation_deltas": {
+    "accuracy": -0.022916,
+    "f1": -0.017344,
+    "precision": -0.008915,
+    "recall": -0.025794
+  },
+  "experiment_id": "level-4-features-v2",
+  "feature_plan": {
+    "skipped": [
+      {
+        "formula": "weekly_km_to_date / (prior_week_km + 1.0)",
+        "missing_sources": [
+          "prior_week_km"
+        ],
+        "name": "prior_week_load_ratio",
+        "reason": "unsupported source columns",
+        "sources": [
+          "weekly_km_to_date",
+          "prior_week_km"
+        ]
+      }
+    ],
+    "supported": [
+      {
+        "formula": "weekly_km_to_date / (sleep_hours_last_night + 1.0)",
+        "name": "training_load_to_sleep_ratio",
+        "sources": [
+          "weekly_km_to_date",
+          "sleep_hours_last_night"
+        ],
+        "status": "supported by prediction-time schema"
+      },
+      {
+        "formula": "weekly_km_to_date / (resting_hr_morning + 1.0)",
+        "name": "training_load_to_resting_hr_ratio",
+        "sources": [
+          "weekly_km_to_date",
+          "resting_hr_morning"
+        ],
+        "status": "supported by prediction-time schema"
+      },
+      {
+        "formula": "prior_injury * soreness_score_evening",
+        "name": "injury_soreness_interaction",
+        "sources": [
+          "prior_injury",
+          "soreness_score_evening"
+        ],
+        "status": "supported by prediction-time schema"
+      }
+    ]
+  },
+  "limitations": [
+    "The v1 processed training data is an immutable inherited input whose Level 1 mean imputation was fitted on training runners before Level 2 cross-validation.",
+    "Every new Level 4 imputer and selector is fitted inside each fold, but Level 4 does not reconstruct pre-imputation v1 rows.",
+    "The data, target, and engineered ratios are synthetic educational constructs and are not medical or coaching evidence.",
+    "No consumed v1 holdout label participates in this comparison or selection."
+  ],
+  "model_control": {
+    "estimator": "DecisionTreeClassifier",
+    "fold_local_steps": [
+      "imputer",
+      "selector",
+      "classifier"
+    ],
+    "random_state": 42,
+    "select_k": 4,
+    "selection_score": "f_classif"
+  },
+  "report_version": "2.0.0",
+  "results": {
+    "engineered": {
+      "aggregate": {
+        "generalization_gaps": {
+          "accuracy": 0.254166,
+          "f1": 0.180411,
+          "precision": 0.17082,
+          "recall": 0.184315
+        },
+        "mean_training_metrics": {
+          "accuracy": 1.0,
+          "f1": 1.0,
+          "precision": 1.0,
+          "recall": 1.0
+        },
+        "mean_validation_metrics": {
+          "accuracy": 0.745834,
+          "f1": 0.819589,
+          "precision": 0.82918,
+          "recall": 0.815685
+        },
+        "validation_metric_std": {
+          "accuracy": 0.051539,
+          "f1": 0.034731,
+          "precision": 0.081102,
+          "recall": 0.024922
+        }
+      },
+      "candidate_features": [
+        "weekly_km_to_date",
+        "sleep_hours_last_night",
+        "resting_hr_morning",
+        "soreness_score_evening",
+        "prior_injury",
+        "training_load_to_sleep_ratio",
+        "training_load_to_resting_hr_ratio",
+        "injury_soreness_interaction"
+      ],
+      "feature_stability": {
+        "mean_pairwise_jaccard": 0.577778,
+        "selection_frequency": {
+          "injury_soreness_interaction": 0.5,
+          "resting_hr_morning": 1.0,
+          "sleep_hours_last_night": 0.75,
+          "soreness_score_evening": 1.0,
+          "training_load_to_resting_hr_ratio": 0.5,
+          "weekly_km_to_date": 0.25
+        }
+      },
+      "folds": [
+        {
+          "fit_runner_count": 13,
+          "fold": 1,
+          "fold_signature": "3fb529d77e70d3b7805cc7a955fdad7f1826a466252ee1d29aff3217d6b38274",
+          "imputer_statistics": [
+            32.846154,
+            6.740203,
+            51.01294,
+            4.82231,
+            0.153846,
+            4.294754,
+            0.636242,
+            0.705128
+          ],
+          "runner_overlap": [],
+          "selected_features": [
+            "weekly_km_to_date",
+            "resting_hr_morning",
+            "soreness_score_evening",
+            "training_load_to_resting_hr_ratio"
+          ],
+          "training_metrics": {
+            "accuracy": 1.0,
+            "f1": 1.0,
+            "precision": 1.0,
+            "recall": 1.0
+          },
+          "validation_metrics": {
+            "accuracy": 0.666667,
+            "f1": 0.772727,
+            "precision": 0.73913,
+            "recall": 0.809524
+          },
+          "validation_runner_count": 5
+        },
+        {
+          "fit_runner_count": 13,
+          "fold": 2,
+          "fold_signature": "8d47568662909c8c67d9cfcdb40814ecd29596cb39c6ec1c230300e6b1eeec39",
+          "imputer_statistics": [
+            31.200575,
+            6.740203,
+            51.397556,
+            5.527438,
+            0.230769,
+            4.084228,
+            0.599643,
+            1.205128
+          ],
+          "runner_overlap": [],
+          "selected_features": [
+            "sleep_hours_last_night",
+            "resting_hr_morning",
+            "soreness_score_evening",
+            "injury_soreness_interaction"
+          ],
+          "training_metrics": {
+            "accuracy": 1.0,
+            "f1": 1.0,
+            "precision": 1.0,
+            "recall": 1.0
+          },
+          "validation_metrics": {
+            "accuracy": 0.733333,
+            "f1": 0.8,
+            "precision": 0.761905,
+            "recall": 0.842105
+          },
+          "validation_runner_count": 5
+        },
+        {
+          "fit_runner_count": 14,
+          "fold": 3,
+          "fold_signature": "222efb220522e980a87b5fc71393ad728b90cf40e18eb4fcac056067787a3d0a",
+          "imputer_statistics": [
+            34.400534,
+            6.731806,
+            50.583445,
+            4.869048,
+            0.142857,
+            4.50233,
+            0.66989,
+            0.702381
+          ],
+          "runner_overlap": [],
+          "selected_features": [
+            "sleep_hours_last_night",
+            "resting_hr_morning",
+            "soreness_score_evening",
+            "training_load_to_resting_hr_ratio"
+          ],
+          "training_metrics": {
+            "accuracy": 1.0,
+            "f1": 1.0,
+            "precision": 1.0,
+            "recall": 1.0
+          },
+          "validation_metrics": {
+            "accuracy": 0.791667,
+            "f1": 0.857143,
+            "precision": 0.882353,
+            "recall": 0.833333
+          },
+          "validation_runner_count": 4
+        },
+        {
+          "fit_runner_count": 14,
+          "fold": 4,
+          "fold_signature": "191f175ab2403f13601654df35c8e22b0d1ad3d98201e7ee003e30091f5ea6cb",
+          "imputer_statistics": [
+            32.043391,
+            6.731806,
+            51.071429,
+            5.346907,
+            0.142857,
+            4.195072,
+            0.618628,
+            0.880952
+          ],
+          "runner_overlap": [],
+          "selected_features": [
+            "sleep_hours_last_night",
+            "resting_hr_morning",
+            "soreness_score_evening",
+            "injury_soreness_interaction"
+          ],
+          "training_metrics": {
+            "accuracy": 1.0,
+            "f1": 1.0,
+            "precision": 1.0,
+            "recall": 1.0
+          },
+          "validation_metrics": {
+            "accuracy": 0.791667,
+            "f1": 0.848485,
+            "precision": 0.933333,
+            "recall": 0.777778
+          },
+          "validation_runner_count": 4
+        }
+      ],
+      "pipeline_steps": [
+        "features",
+        "imputer",
+        "selector",
+        "classifier"
+      ],
+      "variant": "engineered"
+    },
+    "raw": {
+      "aggregate": {
+        "generalization_gaps": {
+          "accuracy": 0.23125,
+          "f1": 0.163067,
+          "precision": 0.161905,
+          "recall": 0.158521
+        },
+        "mean_training_metrics": {
+          "accuracy": 1.0,
+          "f1": 1.0,
+          "precision": 1.0,
+          "recall": 1.0
+        },
+        "mean_validation_metrics": {
+          "accuracy": 0.76875,
+          "f1": 0.836933,
+          "precision": 0.838095,
+          "recall": 0.841479
+        },
+        "validation_metric_std": {
+          "accuracy": 0.027873,
+          "f1": 0.021981,
+          "precision": 0.064593,
+          "recall": 0.04047
+        }
+      },
+      "candidate_features": [
+        "weekly_km_to_date",
+        "sleep_hours_last_night",
+        "resting_hr_morning",
+        "soreness_score_evening",
+        "prior_injury"
+      ],
+      "feature_stability": {
+        "mean_pairwise_jaccard": 0.8,
+        "selection_frequency": {
+          "prior_injury": 0.75,
+          "resting_hr_morning": 1.0,
+          "sleep_hours_last_night": 1.0,
+          "soreness_score_evening": 1.0,
+          "weekly_km_to_date": 0.25
+        }
+      },
+      "folds": [
+        {
+          "fit_runner_count": 13,
+          "fold": 1,
+          "fold_signature": "3fb529d77e70d3b7805cc7a955fdad7f1826a466252ee1d29aff3217d6b38274",
+          "imputer_statistics": [
+            32.846154,
+            6.740203,
+            51.01294,
+            4.82231,
+            0.153846
+          ],
+          "runner_overlap": [],
+          "selected_features": [
+            "weekly_km_to_date",
+            "sleep_hours_last_night",
+            "resting_hr_morning",
+            "soreness_score_evening"
+          ],
+          "training_metrics": {
+            "accuracy": 1.0,
+            "f1": 1.0,
+            "precision": 1.0,
+            "recall": 1.0
+          },
+          "validation_metrics": {
+            "accuracy": 0.8,
+            "f1": 0.857143,
+            "precision": 0.857143,
+            "recall": 0.857143
+          },
+          "validation_runner_count": 5
+        },
+        {
+          "fit_runner_count": 13,
+          "fold": 2,
+          "fold_signature": "8d47568662909c8c67d9cfcdb40814ecd29596cb39c6ec1c230300e6b1eeec39",
+          "imputer_statistics": [
+            31.200575,
+            6.740203,
+            51.397556,
+            5.527438,
+            0.230769
+          ],
+          "runner_overlap": [],
+          "selected_features": [
+            "sleep_hours_last_night",
+            "resting_hr_morning",
+            "soreness_score_evening",
+            "prior_injury"
+          ],
+          "training_metrics": {
+            "accuracy": 1.0,
+            "f1": 1.0,
+            "precision": 1.0,
+            "recall": 1.0
+          },
+          "validation_metrics": {
+            "accuracy": 0.733333,
+            "f1": 0.8,
+            "precision": 0.761905,
+            "recall": 0.842105
+          },
+          "validation_runner_count": 5
+        },
+        {
+          "fit_runner_count": 14,
+          "fold": 3,
+          "fold_signature": "222efb220522e980a87b5fc71393ad728b90cf40e18eb4fcac056067787a3d0a",
+          "imputer_statistics": [
+            34.400534,
+            6.731806,
+            50.583445,
+            4.869048,
+            0.142857
+          ],
+          "runner_overlap": [],
+          "selected_features": [
+            "sleep_hours_last_night",
+            "resting_hr_morning",
+            "soreness_score_evening",
+            "prior_injury"
+          ],
+          "training_metrics": {
+            "accuracy": 1.0,
+            "f1": 1.0,
+            "precision": 1.0,
+            "recall": 1.0
+          },
+          "validation_metrics": {
+            "accuracy": 0.75,
+            "f1": 0.842105,
+            "precision": 0.8,
+            "recall": 0.888889
+          },
+          "validation_runner_count": 4
+        },
+        {
+          "fit_runner_count": 14,
+          "fold": 4,
+          "fold_signature": "191f175ab2403f13601654df35c8e22b0d1ad3d98201e7ee003e30091f5ea6cb",
+          "imputer_statistics": [
+            32.043391,
+            6.731806,
+            51.071429,
+            5.346907,
+            0.142857
+          ],
+          "runner_overlap": [],
+          "selected_features": [
+            "sleep_hours_last_night",
+            "resting_hr_morning",
+            "soreness_score_evening",
+            "prior_injury"
+          ],
+          "training_metrics": {
+            "accuracy": 1.0,
+            "f1": 1.0,
+            "precision": 1.0,
+            "recall": 1.0
+          },
+          "validation_metrics": {
+            "accuracy": 0.791667,
+            "f1": 0.848485,
+            "precision": 0.933333,
+            "recall": 0.777778
+          },
+          "validation_runner_count": 4
+        }
+      ],
+      "pipeline_steps": [
+        "features",
+        "imputer",
+        "selector",
+        "classifier"
+      ],
+      "variant": "raw"
+    }
+  },
+  "selected_variant": "raw",
+  "selection_basis": "highest mean grouped validation accuracy; smaller absolute accuracy gap; raw on an exact tie",
+  "v2_schema": {
+    "path": "contracts/v2/feature_schema_contract.json",
+    "sha256": "1292d52e8ea08df61b8cc84fa6cd91c9c9deaf0418a963fb5cd32f05316d7a9c"
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "development_data": {
+    "path": "data/v1/processed/train.csv",
+    "sha256": "7daacc7270362956a437c8374d42f43f1ac38b55a816eda69fbfa75af61eaf0d"
+  },
+  "feature_dataset_version": "v2",
+  "feature_experiment": {
+    "path": "reports/v2/feature_experiment.json",
+    "sha256": "7bf284c4a02a41386e03a3b6e12e2cd44aef40cf4e80970c15aafb412f682d00"
+  },
+  "feature_schema": {
+    "path": "contracts/v2/feature_schema_contract.json",
+    "sha256": "1292d52e8ea08df61b8cc84fa6cd91c9c9deaf0418a963fb5cd32f05316d7a9c"
+  },
+  "handoff_version": "2.0.0",
+  "holdout_policy": {
+    "forbidden_future_uses": [
+      "feature_selection",
+      "model_comparison",
+      "model_selection",
+      "threshold_tuning"
+    ],
+    "marker": {
+      "path": "artifacts/v1/holdout_consumed.json",
+      "sha256": "ff9a303205756aee4975391cbde6a76763d045dc6623a742f93f6082379f1dd9"
+    },
+    "required_level5_evidence": "grouped development validation or a new untouched holdout",
+    "v1_holdout_consumed": true
+  },
+  "next_level": "Level 5",
+  "scientific_status": "Synthetic educational feature experiment, not a validated coaching system.",
+  "selected_candidate_features": [
+    "weekly_km_to_date",
+    "sleep_hours_last_night",
+    "resting_hr_morning",
+    "soreness_score_evening",
+    "prior_injury"
+  ],
+  "selected_variant": "raw",
+  "selection_basis": "highest mean grouped validation accuracy; smaller absolute accuracy gap; raw on an exact tie",
+  "source_dataset_version": "v1"
+}

@@ -1,0 +1,76 @@
+{
+  "candidate_feature_columns": [
+    "weekly_km_to_date",
+    "sleep_hours_last_night",
+    "resting_hr_morning",
+    "soreness_score_evening",
+    "prior_injury",
+    "training_load_to_sleep_ratio",
+    "training_load_to_resting_hr_ratio",
+    "injury_soreness_interaction"
+  ],
+  "dataset_version": "v2",
+  "engineered_feature_columns": [
+    "training_load_to_sleep_ratio",
+    "training_load_to_resting_hr_ratio",
+    "injury_soreness_interaction"
+  ],
+  "feature_policy": "Only row-local information marked available at prediction time may enter a transformation.",
+  "group_column": "runner_id",
+  "materialized_dataset_created": false,
+  "prediction_timestamp": "20:00 local time on observation day D",
+  "raw_feature_columns": [
+    "weekly_km_to_date",
+    "sleep_hours_last_night",
+    "resting_hr_morning",
+    "soreness_score_evening",
+    "prior_injury"
+  ],
+  "schema_version": "2.0.0",
+  "scientific_status": "Training-load ratios are experimental synthetic predictors, not validated coaching rules.",
+  "skipped_transformations": [
+    {
+      "formula": "weekly_km_to_date / (prior_week_km + 1.0)",
+      "missing_sources": [
+        "prior_week_km"
+      ],
+      "name": "prior_week_load_ratio",
+      "reason": "unsupported source columns",
+      "sources": [
+        "weekly_km_to_date",
+        "prior_week_km"
+      ]
+    }
+  ],
+  "source_dataset_version": "v1",
+  "supported_transformations": [
+    {
+      "formula": "weekly_km_to_date / (sleep_hours_last_night + 1.0)",
+      "name": "training_load_to_sleep_ratio",
+      "sources": [
+        "weekly_km_to_date",
+        "sleep_hours_last_night"
+      ],
+      "status": "supported by prediction-time schema"
+    },
+    {
+      "formula": "weekly_km_to_date / (resting_hr_morning + 1.0)",
+      "name": "training_load_to_resting_hr_ratio",
+      "sources": [
+        "weekly_km_to_date",
+        "resting_hr_morning"
+      ],
+      "status": "supported by prediction-time schema"
+    },
+    {
+      "formula": "prior_injury * soreness_score_evening",
+      "name": "injury_soreness_interaction",
+      "sources": [
+        "prior_injury",
+        "soreness_score_evening"
+      ],
+      "status": "supported by prediction-time schema"
+    }
+  ],
+  "target_column": "needs_recovery_next_day"
+}

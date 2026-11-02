@@ -82,3 +82,10 @@ Selected confusion matrix `[[TN, FP], [FN, TP]]`: `[[9, 2], [4, 21]]`
 
 Reproduce safeguards with `python -m unittest -v tests/test_data_pipeline.py tests/test_training.py tests/test_evaluation.py`. The holdout command is intentionally excluded because v1 test labels are consumed.
 <!-- LEVEL-3-EVALUATE:END -->
+
+<!-- LEVEL-4-FEATURES:START -->
+## Level 4: Features
+
+[Feature experiment](docs/level-4-features.md)
+
+<!-- LEVEL-4-FEATURES:END -->

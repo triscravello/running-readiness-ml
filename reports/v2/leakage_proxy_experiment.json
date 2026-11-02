@@ -1,0 +1,13 @@
+{
+  "consumed_v1_holdout_read": false,
+  "development_only": true,
+  "naive_grouped_validation_accuracy": 1.0,
+  "naive_result_status": "invalid leakage demonstration",
+  "proxy_column": "development_only_leakage_proxy",
+  "proxy_definition": "exact copy of the development target for an intentionally invalid demonstration",
+  "repaired_pipeline": {
+    "reason": "Rejected non-prediction-time model inputs: ['development_only_leakage_proxy']",
+    "status": "rejected before fitting"
+  },
+  "report_version": "2.0.0"
+}
