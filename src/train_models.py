@@ -24,6 +24,10 @@ DATASET_VERSION = "v1"
 RANDOM_STATE = 42
 GROUP_FOLDS = 4
 
+# Declare these globally for Level 5
+GROUP_COLUMN = "runner_id"
+SCHEMA_PATH = Path("contracts/v1/schema_contract.json")
+
 
 def fingerprint(path: Path) -> str:
     return sha256(path.read_bytes()).hexdigest()

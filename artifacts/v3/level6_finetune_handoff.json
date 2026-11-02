@@ -1,0 +1,43 @@
+{
+  "approved_features": [
+    "weekly_km_to_date",
+    "sleep_hours_last_night",
+    "resting_hr_morning",
+    "soreness_score_evening",
+    "prior_injury"
+  ],
+  "best_epoch": 83,
+  "consumed_v1_holdout_read": false,
+  "created_by": "Level 5: Networks",
+  "fingerprints": {
+    "checkpoint": "d81488ec56bc0955c86653b07e52cdd7dd829f1fec529dc550c8639079ce3888",
+    "development_data": "7daacc7270362956a437c8374d42f43f1ac38b55a816eda69fbfa75af61eaf0d",
+    "feature_schema": "1292d52e8ea08df61b8cc84fa6cd91c9c9deaf0418a963fb5cd32f05316d7a9c",
+    "level4_handoff": "cdc6d56811553f99a5b666b4b5948661391bf34ba0752a2bcfaa2f001dd5b395",
+    "level5_report": "64a29a13cc4c650707e960c299cccdda7e13b936e97c178143c2b243defc715e",
+    "preprocessor": "d59626ec299ed8389a43b41ba2d0a70b55d66652aede7792bf99d8e219a9caa9"
+  },
+  "forbidden_uses": [
+    "model_comparison",
+    "model_selection",
+    "feature_selection",
+    "threshold_tuning"
+  ],
+  "handoff_version": "3.0.0",
+  "limitations": [
+    "All Level 5 comparisons are development-only because the v1 holdout is already consumed.",
+    "Level 5 fits imputation and scaling inside each relevant training boundary.",
+    "The inherited v1 process used development-wide mean imputation before splitting, so the historical pipeline is not claimed to be leakage-free.",
+    "PyTorch does not guarantee identical results across releases, commits, or platforms even with deterministic settings."
+  ],
+  "next_level": "Level 6: Fine-tune",
+  "seed": 42,
+  "selected_config": {
+    "dropout": 0.25,
+    "hidden_units": 16,
+    "learning_rate": 0.01,
+    "name": "regularized",
+    "weight_decay": 0.001
+  },
+  "threshold": 0.5
+}

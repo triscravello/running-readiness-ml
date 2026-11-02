@@ -27,7 +27,7 @@
     "required_level5_evidence": "grouped development validation or a new untouched holdout",
     "v1_holdout_consumed": true
   },
-  "next_level": "Level 5",
+  "next_level": "Level 5: Networks",
   "scientific_status": "Synthetic educational feature experiment, not a validated coaching system.",
   "selected_candidate_features": [
     "weekly_km_to_date",

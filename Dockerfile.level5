@@ -1,0 +1,13 @@
+# syntax=docker/dockerfile:1
+FROM --platform=linux/amd64 python:3.15.2-slim
+
+ENV PYTHONHASHSEED=42 \
+    LEVEL5_BASE_IMAGE=python:3.15.2-slim
+
+WORKDIR /workspace
+COPY requirements-level5.txt /tmp/requirements-level5.txt
+RUN python -m pip install --no-cache-dir -r /tmp/requirements-level5.txt && \
+    python -m pip install --no-cache-dir torch==2.15.0+cpu \
+      --index-url https://download.pytorch.org/whl/cpu
+
+CMD ["python", "-m", "src.neural_network_experiment", "audit"]

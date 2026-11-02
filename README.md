@@ -89,3 +89,6 @@ Reproduce safeguards with `python -m unittest -v tests/test_data_pipeline.py tes
 [Feature experiment](docs/level-4-features.md)
 
 <!-- LEVEL-4-FEATURES:END -->
+
+<!-- LEVEL_5_NETWORKS -->
+- [Level 5: Networks](docs/level-5-networks.md)
