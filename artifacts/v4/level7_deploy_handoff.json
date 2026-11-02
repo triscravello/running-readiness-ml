@@ -1,0 +1,37 @@
+{
+  "consumed_v1_holdout_read": false,
+  "created_by": "Level 6: Fine-tune",
+  "downstream_epochs": 80,
+  "evidence_scope": "development_only",
+  "feature_names": [
+    "weekly_km_to_date",
+    "sleep_hours_last_night",
+    "resting_hr_morning",
+    "soreness_score_evening",
+    "prior_injury"
+  ],
+  "fingerprints": {
+    "development_data": "7daacc7270362956a437c8374d42f43f1ac38b55a816eda69fbfa75af61eaf0d",
+    "level6_input_handoff": "0e0dfa14ec23d3a27eb67c6fa78e7c6b9ddd83225f9ed519562a075cf0fbffe3",
+    "level6_report": "7e7778e38b45e172e6e58dcefc7e74bd99d72e7ee66463c7da3564b819eb1129",
+    "preprocessor": "d59626ec299ed8389a43b41ba2d0a70b55d66652aede7792bf99d8e219a9caa9",
+    "selected_checkpoint": "ad5d50467e39e809aa49f1a6778f270072e6ca09e8ea3baa22b28cd0c5bb9bfb",
+    "source_checkpoint": "11703490bbe209fccd0e4862864171bfb80e9e7e4c24e62835d9512e083c4778"
+  },
+  "forbidden_uses": [
+    "model_comparison",
+    "model_selection",
+    "feature_selection",
+    "threshold_tuning"
+  ],
+  "handoff_version": "4.0.0",
+  "limitations": [
+    "The historical v1 process used development-wide mean imputation before splitting; Level 6 does not claim the full inherited history is leakage-free.",
+    "The source task is controlled self-supervised synthetic denoising, not external-domain pretraining.",
+    "Training times vary with host load even when model states and metrics reproduce in the same pinned environment."
+  ],
+  "next_level": "Level 7: Deploy",
+  "seed": 42,
+  "selected_approach": "partial",
+  "threshold": 0.5
+}

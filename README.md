@@ -92,3 +92,6 @@ Reproduce safeguards with `python -m unittest -v tests/test_data_pipeline.py tes
 
 <!-- LEVEL_5_NETWORKS -->
 - [Level 5: Networks](docs/level-5-networks.md)
+
+<!-- LEVEL_6_FINETUNE -->
+- [Level 6: Fine-Tune](docs/level-6-finetune.md)

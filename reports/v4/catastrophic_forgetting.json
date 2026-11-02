@@ -1,0 +1,47 @@
+{
+  "comparison": {
+    "controlled": {
+      "encoder_learning_rate": 0.001,
+      "forgetting_supported_by_both_measures": false,
+      "probe_sha256": "1b45bb919b595fdae39601205b05032989f64fd44984156238afc77eb9b14d0e",
+      "representation_cosine_similarity": 0.9920167326927185,
+      "source_reconstruction_loss_after": 0.14560694992542267,
+      "source_reconstruction_loss_before": 0.11555755883455276,
+      "source_reconstruction_loss_change": 0.030049391090869904,
+      "target_validation": {
+        "accuracy": 0.666667,
+        "f1": 0.8,
+        "loss": 0.597166895866394,
+        "precision": 0.689655,
+        "recall": 0.952381
+      }
+    },
+    "excessive": {
+      "encoder_learning_rate": 0.1,
+      "forgetting_supported_by_both_measures": true,
+      "probe_sha256": "1b45bb919b595fdae39601205b05032989f64fd44984156238afc77eb9b14d0e",
+      "representation_cosine_similarity": 0.5799320340156555,
+      "source_reconstruction_loss_after": 37.853126525878906,
+      "source_reconstruction_loss_before": 0.11555755883455276,
+      "source_reconstruction_loss_change": 37.73756896704435,
+      "target_validation": {
+        "accuracy": 0.733333,
+        "f1": 0.818182,
+        "loss": 2.2632877826690674,
+        "precision": 0.782609,
+        "recall": 0.857143
+      }
+    }
+  },
+  "consumed_v1_holdout_read": false,
+  "evidence_scope": "exploratory_development_only",
+  "excessive_rate_caused_more_forgetting_supported": true,
+  "immutable_encoder_sha256_after": "3046285016fd4b9d3cb90f49d278527482f82dbd386a87cf147b204d7ea91f83",
+  "immutable_encoder_sha256_before": "3046285016fd4b9d3cb90f49d278527482f82dbd386a87cf147b204d7ea91f83",
+  "immutable_encoder_unchanged": true,
+  "influences_selected_model": false,
+  "interpretation_rule": "Describe an arm as evidence of forgetting only when reconstruction loss increases and representation similarity falls. Describe the excessive rate as causing more forgetting only when both retention measures are worse than the controlled rate.",
+  "probe_sha256": "1b45bb919b595fdae39601205b05032989f64fd44984156238afc77eb9b14d0e",
+  "report_version": "4.0.0",
+  "same_probe_used_for_all_measurements": true
+}
