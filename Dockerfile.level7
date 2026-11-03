@@ -1,0 +1,24 @@
+# syntax=docker/dockerfile:1
+FROM running-readiness-level6:2.15.0 AS base
+
+WORKDIR /app
+COPY requirements-level7.txt /tmp/requirements-level7.txt
+RUN python -m pip install --no-cache-dir -r /tmp/requirements-level7.txt
+COPY level7_runtime.py level7_service.py ./
+COPY artifacts/v4/level6_selected_model.pt artifacts/v4/level6_selected_model.pt
+COPY artifacts/v4/level6_preprocessor.json artifacts/v4/level6_preprocessor.json
+COPY artifacts/v4/level7_deploy_handoff.json artifacts/v4/level7_deploy_handoff.json
+COPY lineage-attestation.json serving-manifest.json ./
+
+FROM base AS test
+COPY requirements-level7-test.txt /tmp/requirements-level7-test.txt
+RUN python -m pip install --no-cache-dir -r /tmp/requirements-level7-test.txt
+RUN mkdir -p /app/tests
+COPY test_level7_service.py /app/tests/test_level7_service.py
+RUN python -m unittest -v tests/test_level7_service.py && \
+    touch /tmp/level7-tests-passed
+
+FROM base AS runtime
+COPY --from=test /tmp/level7-tests-passed /app/level7-tests-passed
+EXPOSE 8000
+CMD ["uvicorn", "level7_service:app", "--host", "0.0.0.0", "--port", "8000"]

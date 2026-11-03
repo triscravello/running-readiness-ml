@@ -1,0 +1,7 @@
+{
+  "artifacts": {
+    "artifacts/v4/level6_preprocessor.json": "d59626ec299ed8389a43b41ba2d0a70b55d66652aede7792bf99d8e219a9caa9",
+    "artifacts/v4/level6_selected_model.pt": "ad5d50467e39e809aa49f1a6778f270072e6ca09e8ea3baa22b28cd0c5bb9bfb",
+    "artifacts/v4/level7_deploy_handoff.json": "e498bf697174c58e2c8fc341622c5f4deafc58fd4c8111b0adac6194be66a952"
+  }
+}

@@ -33,3 +33,6 @@ models/v1/*.joblib
 # Temporary evidence bundles
 level4-evidence/
 level4-evidence.zip
+
+# Generated Level 7 serving context
+build/level7-context/
