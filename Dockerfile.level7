@@ -15,7 +15,9 @@ COPY requirements-level7-test.txt /tmp/requirements-level7-test.txt
 RUN python -m pip install --no-cache-dir -r /tmp/requirements-level7-test.txt
 RUN mkdir -p /app/tests
 COPY test_level7_service.py /app/tests/test_level7_service.py
-RUN python -m unittest -v tests/test_level7_service.py && \
+COPY test_level7_bundle.py /app/tests/test_level7_bundle.py
+RUN LEVEL7_REQUIRE_BUNDLE_TESTS=1 python -m unittest -v \
+      tests/test_level7_service.py tests/test_level7_bundle.py && \
     touch /tmp/level7-tests-passed
 
 FROM base AS runtime

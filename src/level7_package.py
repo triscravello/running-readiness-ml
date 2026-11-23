@@ -22,6 +22,7 @@ ALLOWLIST = {
     Path("src/level7_runtime.py"): Path("level7_runtime.py"),
     Path("src/level7_service.py"): Path("level7_service.py"),
     Path("tests/test_level7_service.py"): Path("test_level7_service.py"),
+    Path("tests/test_level7_bundle.py"): Path("test_level7_bundle.py"),
     CHECKPOINT_RELATIVE: CHECKPOINT_RELATIVE,
     PREPROCESSOR_RELATIVE: PREPROCESSOR_RELATIVE,
     HANDOFF_RELATIVE: HANDOFF_RELATIVE,

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Annotated
 
@@ -13,7 +14,8 @@ try:
 except ModuleNotFoundError:
     from level7_runtime import ModelRuntime
 
-BASE_DIR = Path(__file__).resolve().parent
+_override = os.environ.get("SERVING_ROOT")
+BASE_DIR = Path(_override).resolve() if _override else Path(__file__).resolve().parent
 runtime = ModelRuntime(BASE_DIR)
 app = FastAPI(
     title="Running Readiness Level 7",

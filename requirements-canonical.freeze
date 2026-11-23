@@ -1,0 +1,96 @@
+# ======================================================================
+# ENVIRONMENT INVENTORY -- NOT A REPRODUCIBLE INSTALLATION LOCKFILE
+#
+# This file records the packages observed (via `python -m pip freeze`) inside
+# the EXISTING local Docker images during the F0A read-only baseline on
+# 2026-11-23. It documents what the verified images contain. Do not use it as
+# `pip install -r` input and do not treat it as pinned or hash-locked:
+#   * it carries no --hash entries and no index information;
+#   * torch is a local-version build (+cpu) that is only served by the PyTorch
+#     CPU index, not PyPI;
+#   * a clean rebuild from Dockerfile.level5 / requirements-level5.txt was
+#     observed to differ from these images (base-image layer, and the
+#     unpinned transitive packages cloudpickle, narwhals, threadpoolctl).
+# Dependency installation behaviour is unchanged by this file. A real,
+# hash-locked lockfile is a separate later milestone.
+#
+# Platform for every image below: linux/amd64, Debian GNU/Linux 13 (trixie),
+# Python 3.15.2, PYTHONHASHSEED=42.
+# ======================================================================
+
+# ----------------------------------------------------------------------
+# Image: running-readiness-level5:2.15.0
+# Image ID: sha256:87f3e46f2e825def609c8e4033445e367523f65e7566b944daf5dda9c75e6b1d
+# Created: 2026-11-02T18:49:00Z
+# Source: Dockerfile.level5 (python:3.15.2-slim + requirements-level5.txt
+#         + torch==2.15.0+cpu)
+# Note: running-readiness-level6:2.15.0 (Image ID sha256:d19cca78ec61...,
+#       created 2026-11-02T21:06:50Z) is FROM this image and adds only
+#       WORKDIR/CMD per Dockerfile.level6; its package list was not frozen
+#       separately, but its torch/numpy/pandas/scikit-learn/scipy/joblib
+#       versions were observed to be identical.
+# ----------------------------------------------------------------------
+cloudpickle==3.1.2
+filelock==4.2.4
+fsspec==2026.9.0
+Jinja2==3.1.6
+joblib==1.6.0
+MarkupSafe==2.1.5
+mpmath==1.3.0
+narwhals==2.28.0
+networkx==3.7
+numpy==2.5.4
+pandas==3.1.0
+python-dateutil==4.0.0
+scikit-learn==1.9.1
+scipy==1.18.1
+setuptools==78.1.0
+sympy==1.14.0
+threadpoolctl==3.7.0
+torch==2.15.0+cpu
+typing_extensions==4.16.0
+tzdata==2026.6
+
+# ----------------------------------------------------------------------
+# Image: running-readiness-level7:4.0.0
+# Image ID: sha256:2335bca6985513d1db7079f3cf43391da91b193dd475fe5f7303dadde9c2d099
+# Created: 2026-11-03T12:45:05Z
+# Source: Dockerfile.level7 (FROM running-readiness-level6:2.15.0
+#         + requirements-level7.txt). This list is the Level 5 list above
+#         plus the serving packages (fastapi, pydantic, starlette, uvicorn
+#         and their dependencies). The test-only package httpx is NOT in
+#         the runtime image.
+# ----------------------------------------------------------------------
+annotated-doc==0.0.5
+annotated-types==0.8.0
+anyio==4.16.0
+click==8.5.0
+cloudpickle==3.1.2
+fastapi==0.162.0
+filelock==4.2.4
+fsspec==2026.9.0
+h11==0.16.0
+idna==3.20
+Jinja2==3.1.6
+joblib==1.6.0
+MarkupSafe==2.1.5
+mpmath==1.3.0
+narwhals==2.28.0
+networkx==3.7
+numpy==2.5.4
+opentelemetry-api==1.45.2
+pandas==3.1.0
+pydantic==2.14.2
+pydantic_core==2.50.2
+python-dateutil==4.0.0
+scikit-learn==1.9.1
+scipy==1.18.1
+setuptools==78.1.0
+starlette==1.10.0
+sympy==1.14.0
+threadpoolctl==3.7.0
+torch==2.15.0+cpu
+typing-inspection==0.4.4
+typing_extensions==4.16.0
+tzdata==2026.6
+uvicorn==0.54.0
