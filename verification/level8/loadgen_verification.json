@@ -1,0 +1,334 @@
+{
+ "schema_version": 1,
+ "purpose": "Verification of the hardened Level 8 load generator (summary schema level8-loadgen-summary/2). This is evidence about the MEASUREMENT SYSTEM, not an operational acceptance result for the service.",
+ "parent_commit_sha": "3b7980329b540fbdbcb66318fb42b948ed763b5c",
+ "original_load_generator_sha256": "a3664167a01fa98f91f7cd8529eeb1051c04ed6bf7ad28eb40bf7a87f10a7d80",
+ "historical_mixed_load_evidence_sha256": "89a4f469d271d29c272d7370759a3c36dc06411e37e0ae542782ab2b29725c06",
+ "historical_evidence_status": "unchanged and byte-identical; its operational acceptance result remains FAIL",
+ "historical_clarification": "The original mixed_load.json success_over_scheduled value of 0.8807 refers to the measurement window, with 2,642 successful predictions out of 3,000 scheduled arrivals. The whole-run success rate is 3,642 out of 4,000, or 91.05%. The original field name was ambiguous, but the reported arithmetic was consistent. The original benchmark evidence remains unchanged and its operational acceptance result remains FAIL. The corrected harness uses a total client deadline rather than the historical per-phase-only timeout behavior. Future latency and failure distributions are therefore not directly interchangeable with historical measurements.",
+ "defects_found_in_the_committed_harness": [
+  {
+   "id": "B1",
+   "defect": "scheduled_in_window was derived from the scheduling-lag list, which only contains issued requests; scheduled arrivals were never counted independently",
+   "correction": "deterministic schedule (arrival k at t_start + k/rate), counted analytically and recorded per arrival in a ledger; scheduled = attempted + missed is an invariant"
+  },
+  {
+   "id": "B2",
+   "defect": "the in-flight count was incremented when a request task started running, so tasks created but not yet started were not bounded (observed in-flight 143 against a configured 100 and 128 connections)",
+   "correction": "capacity is reserved synchronously before the task is created, held until the task finishes (including waiting for a pooled connection), and released exactly once on every path"
+  },
+  {
+   "id": "B3",
+   "defect": "missed arrivals were a single counter without identity, time, cohort or reason",
+   "correction": "every missed arrival is a ledger record with identity, scheduled and detection times, cohort and a fixed reason code"
+  },
+  {
+   "id": "B4",
+   "defect": "the 2 s httpx timeout was a per-phase timeout; requests ran up to 7.8 s without a client timeout",
+   "correction": "one absolute total deadline per attempted request from task start, covering pool acquisition, connection, transmission, body, parsing and validation; late completions are client deadlines; httpx phase timeouts stay as subordinate safeguards"
+  },
+  {
+   "id": "B5",
+   "defect": "rates did not name their denominators and success_fraction used completed requests",
+   "correction": "every rate carries numerator, denominator and denominator_is; null for zero denominators; attempted-request and scheduled-arrival success rates are separate"
+  },
+  {
+   "id": "B6",
+   "defect": "no cohort-separated reconciliation, outstanding-at-end or drain duration",
+   "correction": "warm-up, measurement and whole-run blocks per stream with reconciliation invariants, outstanding work at measurement end, drain duration and completion-window throughput"
+  }
+ ],
+ "contracts": {
+  "arrival_schedule": "arrival k is scheduled at t_start + k/rate on a monotonic clock; warm-up is the half-open interval [0, warmup), measurement is [warmup, warmup + measure); 100/s with 10 s + 30 s gives exactly 1,000 + 3,000 = 4,000 and 40/s gives 400 + 1,200 = 1,600; cohort follows the SCHEDULED time",
+  "late_arrival_policy": "unchanged in substance and now explicit: a late arrival is issued as soon as the scheduler resumes, in schedule order; there is no lateness cutoff and no unbounded catch-up burst because every arrival must first reserve capacity; reasons for a miss: capacity_exhausted, task_creation_failed, cancelled_before_start, not_reached_before_stop; detection lag is recorded per miss",
+  "capacity": "generator capacity per traffic kind (--max-backlog, default 100) is distinct from the HTTP connection-pool limit (--max-connections, default 128) and from the server's dispatcher capacity",
+  "total_deadline": "--timeout (default 2 s) is the total client deadline measured from task start; phase timeouts are set to the same value as subordinate safeguards; synchronous JSON parsing and validation cannot be interrupted, so the deadline is checked after them; this is an application-level deadline, not a wall-clock guarantee under event-loop starvation; the production 500 ms admission and 250 ms execution deadlines are unchanged and unrelated",
+  "terminal_outcomes": [
+   "success",
+   "http_error",
+   "transport_failure",
+   "client_deadline",
+   "invalid_json",
+   "contract_violation",
+   "association_violation",
+   "cancelled"
+  ],
+  "server_504": "a 504 received before the deadline is an http_error with status 504, not a client deadline",
+  "closed_loop": "no offered-arrival denominator is invented: scheduled counts and scheduled-arrival rates are null; attempted iterations, outcomes and throughput are reported",
+  "percentiles": "linear interpolation between closest ranks; an empty sample gives n = 0 and null statistics; missed arrivals never contribute to any latency sample"
+ },
+ "denominator_definitions": {
+  "success_rate_of_attempted": "successful / attempted requests in the same cohort",
+  "success_rate_of_scheduled": "successful / scheduled arrivals in the same cohort (open-loop and burst streams only)",
+  "cohorts": [
+   "warmup",
+   "measurement",
+   "whole_run"
+  ]
+ },
+ "test_methodology": {
+  "deterministic": "injectable clock, fake scheduler time (arrivals already due never yield), fake post functions, synthetic ledgers; no real-time sleeping is the primary mechanism for accounting, capacity or boundary tests; the hung-acquisition, multi-phase and slow-body deadline tests and the five socket tests use small real asyncio timers with large margins",
+  "socket_level": "a controlled in-test HTTP/1.1 server on 127.0.0.1 with real asyncio sockets and httpx; no production endpoint and no Level 8 service involved",
+  "smoke": "one short run of the hardened generator against the committed flat-image Level 8 service on an isolated Docker network; not an operational benchmark"
+ },
+ "test_results": {
+  "file": "tests/test_level8_loadgen.py",
+  "tests": 37,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 0,
+  "by_class": {
+   "ArrivalAccountingTests": 9,
+   "CapacityTests": 8,
+   "DeadlineTests": 8,
+   "OutcomeAccountingTests": 6,
+   "HistoricalFixtureTests": 1,
+   "SocketIntegrationTests": 5
+  },
+  "full_level8_suite_repository_layout": {
+   "ran": 217,
+   "skipped": 3,
+   "failures": 0,
+   "errors": 0,
+   "note": "the 3 skips are 2 opt-in engine tests and the flat-image module reporting NOT APPLICABLE in the repository layout"
+  },
+  "stability": "After one timing-sensitive socket test was widened, the harness suite passed five consecutive runs: three standalone, one with four CPU-bound processes sharing the container, and one inside the full 217-test suite. Before that change the same test failed once in the full-suite run (a 0.25 s total deadline across 25 concurrent connections), which is recorded here.",
+  "historical_fixture": "P2 repetition 3 arithmetic reproduced from synthetic records: whole run scheduled 4000, attempted 3642, successful 3642, missed 358, scheduled-arrival success 0.9105 (denominator 4000); measurement scheduled 3000, attempted 2642, successful 2642, missed 358, scheduled-arrival success 0.880667 (denominator 3000); the rates are separately labelled cohort blocks"
+ },
+ "socket_level_results": [
+  "mixed outcomes over real sockets: 5 success, 10 http_error (503 and 504), 5 client_deadline, 5 transport_failure",
+  "total deadline enforced while phase timeouts were 5 s, and the server observed the client disconnect",
+  "pool contention: with a 2-connection pool the queued requests failed on the total deadline (pool wait counts)",
+  "open-loop at 200/s with capacity 5: max outstanding never above 5, capacity_exhausted misses recorded, scheduled = attempted + missed, no unterminated attempts",
+  "cancelling a run mid-flight: all reservations released once, no leaked tasks"
+ ],
+ "smoke_against_the_committed_service": {
+  "description": "predict 50/s open-loop, explain 10/s open-loop, 2 closed-loop explain callers, burst of 8, 1 s warm-up + 4 s measurement, flat image, isolated network",
+  "summary_schema": "level8-loadgen-summary/2",
+  "generator_capacity": {
+   "max_outstanding_by_kind": {
+    "explain": 11,
+    "predict": 2
+   },
+   "violations": 0,
+   "double_release_attempts": 0,
+   "reserved_total": 609,
+   "released_total": 609,
+   "outstanding_at_end": 0
+  },
+  "streams": {
+   "predict_open_loop": {
+    "scheduled_arrivals": 200,
+    "attempted": 200,
+    "missed": 0,
+    "outcomes": {
+     "success": 200
+    },
+    "http_status_counts": {
+     "200": 200
+    },
+    "success_rate_of_attempted": {
+     "value": 1.0,
+     "numerator": 200,
+     "denominator": 200,
+     "denominator_is": "attempted_requests_in_this_cohort"
+    },
+    "success_rate_of_scheduled": {
+     "value": 1.0,
+     "numerator": 200,
+     "denominator": 200,
+     "denominator_is": "scheduled_arrivals_in_this_cohort"
+    },
+    "invariants_hold": true,
+    "outstanding_at_measurement_end": 0,
+    "drain_duration_s": 0.0,
+    "warmup_scheduled": 50,
+    "warmup_attempted": 50
+   },
+   "explain_open_loop": {
+    "scheduled_arrivals": 40,
+    "attempted": 40,
+    "missed": 0,
+    "outcomes": {
+     "success": 40
+    },
+    "http_status_counts": {
+     "200": 40
+    },
+    "success_rate_of_attempted": {
+     "value": 1.0,
+     "numerator": 40,
+     "denominator": 40,
+     "denominator_is": "attempted_requests_in_this_cohort"
+    },
+    "success_rate_of_scheduled": {
+     "value": 1.0,
+     "numerator": 40,
+     "denominator": 40,
+     "denominator_is": "scheduled_arrivals_in_this_cohort"
+    },
+    "invariants_hold": true,
+    "outstanding_at_measurement_end": 0,
+    "drain_duration_s": 0.0,
+    "warmup_scheduled": 10,
+    "warmup_attempted": 10
+   },
+   "explain_closed_loop": {
+    "scheduled_arrivals": null,
+    "attempted": 213,
+    "missed": null,
+    "outcomes": {
+     "success": 213
+    },
+    "http_status_counts": {
+     "200": 213
+    },
+    "success_rate_of_attempted": {
+     "value": 1.0,
+     "numerator": 213,
+     "denominator": 213,
+     "denominator_is": "attempted_requests_in_this_cohort"
+    },
+    "success_rate_of_scheduled": {
+     "value": null,
+     "numerator": 213,
+     "denominator": null,
+     "denominator_is": "not defined for closed-loop traffic (no offered arrivals)"
+    },
+    "invariants_hold": true,
+    "outstanding_at_measurement_end": 2,
+    "drain_duration_s": 0.025,
+    "warmup_scheduled": null,
+    "warmup_attempted": 88
+   },
+   "explain_burst": {
+    "scheduled_arrivals": 8,
+    "attempted": 8,
+    "missed": 0,
+    "outcomes": {
+     "success": 6,
+     "http_error": 2
+    },
+    "http_status_counts": {
+     "200": 6,
+     "503": 2
+    },
+    "success_rate_of_attempted": {
+     "value": 0.75,
+     "numerator": 6,
+     "denominator": 8,
+     "denominator_is": "attempted_requests_in_this_cohort"
+    },
+    "success_rate_of_scheduled": {
+     "value": 0.75,
+     "numerator": 6,
+     "denominator": 8,
+     "denominator_is": "scheduled_arrivals_in_this_cohort"
+    },
+    "invariants_hold": true,
+    "outstanding_at_measurement_end": 0,
+    "drain_duration_s": 0.0,
+    "warmup_scheduled": 0,
+    "warmup_attempted": 0
+   }
+  },
+  "observation": "the committed service's 503 explanation_overloaded responses (burst) were accepted as valid http_error outcomes with the correct Retry-After; capacity violations 0; the original request validation passed on every response"
+ },
+ "capacity_and_cancellation_observations": {
+  "reservation_before_task_start": "500 due arrivals with capacity 10 created exactly 10 tasks and 490 recorded misses without a single task having started",
+  "max_outstanding_never_above_capacity": true,
+  "release_exactly_once": "double_release_attempts stayed 0 in every deterministic and socket test",
+  "no_leaked_tasks_after_drain": true
+ },
+ "cli_and_schema_compatibility": {
+  "unchanged": [
+   "--base-url",
+   "--mode ready|run",
+   "--profile",
+   "--predict-rate",
+   "--explain-rate",
+   "--explain-callers",
+   "--warmup",
+   "--measure",
+   "--burst",
+   "--burst-at",
+   "--bucket",
+   "--max-connections",
+   "--ready-timeout",
+   "--diag-url",
+   "--out",
+   "--raw",
+   "the 50 deterministic inputs, expected results, response validation and profile rates"
+  ],
+  "intentionally_changed": [
+   "--timeout is now the TOTAL client deadline (was httpx per-phase only)",
+   "--max-backlog is the generator capacity per traffic kind including reserved, waiting and executing work (was a count of started tasks)",
+   "the summary schema is new (level8-loadgen-summary/2: streams, cohorts, ledger-based counts); the raw file now holds one record per arrival or iteration including missed arrivals",
+   "invalid configurations (non-positive rates or durations, callers above capacity) are rejected with exit code 2"
+  ],
+  "historical_scripts": "the scratch orchestrators used for L8-2D/L8-2DV read the old schema and are not compatible; the committed historical evidence is not reinterpreted"
+ },
+ "acceptance_gates": [
+  {
+   "gate": "scheduled arrivals counted independently of attempts",
+   "result": "PASS"
+  },
+  {
+   "gate": "scheduled = attempted + missed for every finalized open-loop cohort",
+   "result": "PASS"
+  },
+  {
+   "gate": "attempted = successful + failed after drain, outcomes mutually exclusive",
+   "result": "PASS"
+  },
+  {
+   "gate": "no generator-capacity violations; reservation before task creation",
+   "result": "PASS"
+  },
+  {
+   "gate": "every missed arrival represented with identity, times, cohort and reason",
+   "result": "PASS"
+  },
+  {
+   "gate": "total deadline semantics (before, at, after; phases; acquisition; synchronous validation; 504 vs deadline)",
+   "result": "PASS"
+  },
+  {
+   "gate": "no leaked tasks or reservations after drain or cancellation",
+   "result": "PASS"
+  },
+  {
+   "gate": "warm-up and measurement cohorts reconcile independently",
+   "result": "PASS"
+  },
+  {
+   "gate": "historical denominator arithmetic reproduced with unambiguous labelling",
+   "result": "PASS"
+  },
+  {
+   "gate": "existing response validation and workload unchanged (fingerprint and profile table pinned)",
+   "result": "PASS"
+  },
+  {
+   "gate": "no production file changed; historical evidence byte-identical",
+   "result": "PASS"
+  },
+  {
+   "gate": "deadline guarantee under event-loop starvation",
+   "result": "NOT VERIFIED",
+   "detail": "by design an application-level deadline; not claimed"
+  }
+ ],
+ "overall_harness_verification": "PASS",
+ "known_limitations": [
+  "The total deadline is cooperative: it cannot interrupt synchronous parsing and validation and is not a wall-clock guarantee when the event loop is starved.",
+  "Socket-level tests use a controlled in-test server on loopback, not the Level 8 service; the Level 8 compatibility evidence is one short smoke run.",
+  "The deadline tests that use real timers and the five socket tests are the only timing-sensitive tests; they passed repeatedly, including under CPU saturation, but are not clock-independent.",
+  "Only the hardened generator is verified here; no operational benchmark was rerun, so no new service measurements exist and historical results are not reinterpreted.",
+  "The consumed-holdout uncertainty documented in mixed_load.json is unchanged."
+ ],
+ "source_hashes": {
+  "tests/level8_loadgen.py": "58e6068c333707a0c38d6194fed49c642f0482c7b9bf57bf41185b35c5c681d9",
+  "tests/test_level8_loadgen.py": "66c323b6eeb0fe29808cc745b4f23afb63d38f0937ebb5dd4f052648ac1a2cf6"
+ }
+}
