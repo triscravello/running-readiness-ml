@@ -1,0 +1,201 @@
+{
+  "schema_version": 1,
+  "scope": "Numerical verification of the Level 8 Integrated Gradients engine against an independent exact oracle. It is NOT evidence of model validity, of real-world predictive value, or of production performance.",
+  "provenance": {
+    "historical_f2b": "Feasibility experiment F2B (scratch harness, not in this repository). Reported unchanged, for context only.",
+    "l8_1": "Level 8 milestone L8-1: tests/test_level8_engine.py run against src/level8_explain.py in the canonical image.",
+    "holdout_data_used": false,
+    "inputs": "Synthetic grids only (see grid_construction)."
+  },
+  "model_identity": {
+    "selected_approach": "partial",
+    "handoff_version": "4.0.0",
+    "development_only": true,
+    "artifact_sha256": {
+      "artifacts/v4/level6_preprocessor.json": "d59626ec299ed8389a43b41ba2d0a70b55d66652aede7792bf99d8e219a9caa9",
+      "artifacts/v4/level6_selected_model.pt": "ad5d50467e39e809aa49f1a6778f270072e6ca09e8ea3baa22b28cd0c5bb9bfb",
+      "artifacts/v4/level7_deploy_handoff.json": "e498bf697174c58e2c8fc341622c5f4deafc58fd4c8111b0adac6194be66a952"
+    }
+  },
+  "numerical_settings": {
+    "library": "captum",
+    "library_version": "0.9.0",
+    "method": "integrated_gradients",
+    "integration": "riemann_middle",
+    "n_steps": 800,
+    "target": "pre_sigmoid_logit",
+    "baseline": "B0 (standardized zero vector)",
+    "one_input_per_call": true,
+    "torch_intra_op_threads_in_verification": 1,
+    "oracle": "exact float64 piecewise-linear IG (tests/level8_oracle.py)"
+  },
+  "grid_construction": {
+    "generator": "numpy.random.default_rng(42)",
+    "draw_order": [
+      "dev uniform",
+      "dev prior_injury",
+      "wide uniform",
+      "wide prior_injury",
+      "pool uniform",
+      "pool prior_injury"
+    ],
+    "dev_range": {
+      "n": 500,
+      "lo": [
+        20.0,
+        5.5,
+        45.0,
+        0.0,
+        0.0
+      ],
+      "hi": [
+        45.0,
+        8.0,
+        57.0,
+        10.0,
+        1.0
+      ],
+      "prior_injury": "Bernoulli(1/6)"
+    },
+    "straddle_threshold": {
+      "n": 20,
+      "pool": 20000,
+      "selection": "smallest abs(logit) from a development-range pool"
+    },
+    "api_corners": "32 corners of the Level 7 API bounds (digest only; not explained)",
+    "api_wide": "100 uniform API-bound points (digest only; not explained)",
+    "cross_check": {
+      "provenance": "HISTORICAL, MANUALLY RECORDED. Not produced by the test suite and not reproducible from this repository.",
+      "what": "A one-time comparison, made during L8-1, of the four digests above against grids built by the original external F2B scratch harness (which is not part of this repository). They were bit-identical.",
+      "regenerated_by_tests": false,
+      "reproducible_from_repository": false,
+      "what_the_repository_can_check": "The recorded digests are re-verified against the repository grid builder (tests/level8_oracle.py) by test_grid_digests_match_committed_evidence; that check does not involve the F2B harness."
+    },
+    "sha256_float64": {
+      "dev_range": "464dc66ac713af1397cc628660e76e98320edba4f7d3ef270a6543ca42381e1d",
+      "straddle_threshold": "9fa55597805dfa086f0bd3870a0d86185a0895407be1fcc2b108564936596443",
+      "api_corners": "f6ba0bb1c224924943b403f705db896cd32582de082145a1c91468fb1608999b",
+      "api_wide": "9b005675c673ff25a3d278aeda4fcc7827d5ffc96ce4957771314e8f18b6dccf"
+    }
+  },
+  "acceptance_criteria": {
+    "feature_count": 5,
+    "completeness": "abs(residual) <= 0.002 + 0.005 * abs(target_difference)",
+    "max_single_feature_abs_error_vs_oracle": 0.005,
+    "relative_L1_error_vs_oracle": {
+      "max": 0.005,
+      "denominator_floor": 0.05
+    },
+    "sign_agreement": "where abs(oracle attribution) > 0.02",
+    "top_feature": "engine top-1 within oracle set with abs >= max abs - 0.005",
+    "prediction_logit_parity_tolerance": 2e-06,
+    "serial_engine_p95_latency_ms": 25.0
+  },
+  "historical_f2b_results": {
+    "label": "HISTORICAL. Scratch harness, same configuration, 1 torch thread.",
+    "dev_range": {
+      "n_inputs": 500,
+      "all_gates_pass_per_input": 500,
+      "max_abs_residual": 0.0016907751560211182,
+      "max_residual_over_allowed": 0.706366012562183,
+      "max_feature_abs_error": 0.0009215216473620891,
+      "max_relative_L1": 0.0013642862162892668,
+      "material_sign_comparisons": 2402,
+      "strict_top1_agreement": 1.0,
+      "inputs_with_oracle_ties": 2
+    },
+    "straddle_threshold": {
+      "n_inputs": 20,
+      "all_gates_pass_per_input": 20,
+      "max_abs_residual": 0.0009660078212618828,
+      "max_residual_over_allowed": 0.1328605131802433,
+      "max_feature_abs_error": 0.0009486701671095332,
+      "max_relative_L1": 0.0006190904722865397,
+      "material_sign_comparisons": 93,
+      "strict_top1_agreement": 1.0,
+      "inputs_with_oracle_ties": 0
+    },
+    "determinism": "Identical attributions across repeated calls, across 1/2/4/8 torch threads and 5 processes (F2).",
+    "excluded": "Gauss-Legendre timings and runs with invalid latency measurements are deliberately not reproduced here."
+  },
+  "l8_1_results": {
+    "label": "CURRENT. Regenerated by the test suite against the corrected engine (L8-1 as amended by L8-1R).",
+    "dev_range": {
+      "n_inputs": 500,
+      "all_gates_pass_per_input": 500,
+      "finite_five_attributions_in_canonical_order": true,
+      "max_abs_residual": 0.0016907751560211182,
+      "max_residual_over_allowed": 0.706366012562183,
+      "max_feature_abs_error": 0.0009215216473620891,
+      "p99_feature_abs_error": 0.0007690016417149522,
+      "max_relative_L1": 0.0013642862162892668,
+      "material_sign_comparisons": 2402,
+      "strict_top1_agreement": 1.0,
+      "inputs_with_oracle_ties": 2,
+      "max_probability_parity_error": 7.722090322737074e-08
+    },
+    "straddle_threshold": {
+      "n_inputs": 20,
+      "all_gates_pass_per_input": 20,
+      "finite_five_attributions_in_canonical_order": true,
+      "max_abs_residual": 0.0009664846584200859,
+      "max_residual_over_allowed": 0.13292613887641475,
+      "max_feature_abs_error": 0.0009486701671095332,
+      "p99_feature_abs_error": 0.0008889516775368129,
+      "max_relative_L1": 0.0006190904722865397,
+      "material_sign_comparisons": 93,
+      "strict_top1_agreement": 1.0,
+      "inputs_with_oracle_ties": 0,
+      "max_probability_parity_error": 3.7399635610668724e-08
+    }
+  },
+  "l8_1r_corrections": {
+    "label": "Corrections made after the L8-1 pre-commit review. Numerical settings and tolerances are unchanged.",
+    "items": [
+      "Oversized integers in continuous fields are rejected as invalid input instead of escaping as OverflowError.",
+      "explain_standardized is now the private _explain_standardized and returns finite floats only; the public result is built in explain() from validated input and serializes with allow_nan=False.",
+      "Probability is computed with a numerically stable sigmoid; non-finite logits fail closed.",
+      "The grid cross-check is recorded explicitly as a historical, manually recorded comparison."
+    ],
+    "accepted_limitations": [
+      "numpy float32 scalars are rejected at the public Python interface.",
+      "Mirrored Level 7 prediction bounds are synchronized by a regex test over the service source.",
+      "The shared-engine concurrency collapse has no known root cause; serialized execution only mitigates it.",
+      "Mixed-load performance is not verified.",
+      "Image-layout (flat /app) overlay verification is deferred to integration."
+    ]
+  },
+  "historical_performance_reference": {
+    "label": "HISTORICAL, machine-specific, non-gating. Not a production claim.",
+    "800_steps_1_cpu_1_thread_ms": {
+      "p50": 14.16,
+      "p95": 17.99
+    },
+    "800_steps_4_threads_ms": {
+      "p50": 14.6,
+      "p95": 20.72
+    },
+    "800_steps_8_threads_ms": {
+      "p50": 27.69,
+      "p95": 48.69
+    },
+    "shared_engine_concurrency": "Sharing one engine across concurrent callers collapsed to ~750 ms per call; root cause unexplained. Serialized execution was verified to avoid it.",
+    "serial_48_requests_p95_ms": 18.37
+  },
+  "l8_1_performance_smoke": {
+    "calls": 200,
+    "torch_intra_op_threads": 1,
+    "p50_ms": 14.529906500001744,
+    "p95_ms": 18.08937880000485,
+    "p99_ms": 52.62388304000496,
+    "max_ms": 98.22372799999357,
+    "includes": "validation, ModelRuntime.preprocess, ModelRuntime.predict, IG (800 steps), residual check",
+    "conditions": "canonical Linux/amd64 image; run with --cpus=1 when generating the committed evidence; 100 development-range inputs x2 after 30 warm-up calls; non-gating beyond the 25 ms p95 target"
+  },
+  "notices": [
+    "Attributions describe how this frozen, development-only model's logit differs from its logit at baseline B0; they are not causal effects and do not show what would happen if a person changed a behaviour.",
+    "Baseline B0 is the training mean of every feature, including a fractional prior_injury of about 0.167. No real person has that value; it is a reference point, not a typical or healthy athlete.",
+    "Explanation eligibility is a development-range check. It does not establish statistical in-distribution status or real-world predictive validity.",
+    "Verification of the numbers (agreement with an independent oracle) is separate from model validity and from production performance."
+  ]
+}
