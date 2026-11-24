@@ -473,6 +473,80 @@ class DeadlineTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((entry["outcome"], ctx.admission.total_outstanding(), ctx.admission.double_release_attempts), ("cancelled", 0, 0))
 
 
+class PoolWaitDeadlineTests(unittest.IsolatedAsyncioTestCase):
+    """Deterministic proof (fake clock, controlled synchronization) that waiting for a pooled connection and
+    processing the response share ONE absolute deadline that began at task start. Complements the real-socket
+    pool-contention test, which only shows realistic behavior under contention. Binary-exact fractions are used
+    so the equality boundary is exact."""
+
+    async def attempt_with(self, pool_wait, processing, budget=0.5, start=0.0):
+        clock = FakeClock(start)
+        slot = asyncio.Event()
+        stages = []
+
+        async def post(kind, index):
+            stages.append("waiting_for_pool")
+            await slot.wait()                      # the test grants the pooled connection
+            clock.t += pool_wait
+            stages.append("acquired")
+            clock.t += processing
+            stages.append("processed")
+            return ok_response(kind, index)
+
+        ctx = make_ctx(post, clock, deadline_s=budget, capacity=2)
+        entry = ctx.ledger.add("x:0", "x", "predict", 3, None, "measurement")
+        token = ctx.admission.try_reserve("predict")
+        task = asyncio.create_task(lg.attempt(ctx, entry, token))
+        await asyncio.sleep(0)
+        self.assertEqual(stages, ["waiting_for_pool"])
+        self.assertEqual(ctx.admission.outstanding["predict"], 1)      # a request waiting for the pool still holds capacity
+        slot.set()
+        await task
+        return ctx, entry, stages, task
+
+    async def test_pool_wait_plus_processing_beyond_the_deadline_fails_although_each_part_fits(self):
+        # budget 0.6 scaled to exact binary fractions: pool 0.375 + processing 0.25 = 0.625 > 0.5; each part alone < 0.5
+        ctx, entry, stages, task = await self.attempt_with(pool_wait=0.375, processing=0.25, budget=0.5)
+        self.assertLess(0.25, 0.5)                                     # post-acquisition processing alone fits the budget
+        self.assertLess(0.375, 0.5)                                    # pool wait alone fits the budget
+        self.assertEqual(stages, ["waiting_for_pool", "acquired", "processed"])   # the response did arrive: it was accepted late
+        self.assertEqual((entry["outcome"], entry["code"], entry["status"]), ("client_deadline", "late_completion", 200))
+        self.assertIn("completed_after_deadline_as_success", entry["reason"])   # the deadline was NOT restarted after acquisition
+        self.assertEqual((ctx.admission.total_outstanding(), ctx.admission.double_release_attempts), (0, 0))
+        self.assertTrue(task.done())
+
+    async def test_pool_wait_plus_processing_within_the_deadline_succeeds(self):
+        ctx, entry, _, _ = await self.attempt_with(pool_wait=0.25, processing=0.125, budget=0.5)
+        self.assertEqual(entry["outcome"], "success")
+        self.assertEqual(ctx.admission.total_outstanding(), 0)
+
+    async def test_the_deadline_equality_boundary_across_both_stages(self):
+        _, entry, _, _ = await self.attempt_with(pool_wait=0.25, processing=0.25, budget=0.5)        # total exactly 0.5
+        self.assertEqual((entry["outcome"], entry["code"]), ("client_deadline", "late_completion"))
+        _, entry, _, _ = await self.attempt_with(pool_wait=0.25, processing=0.2499, budget=0.5)      # just under
+        self.assertEqual(entry["outcome"], "success")
+
+    async def test_deadline_is_measured_from_the_recorded_task_start(self):
+        # the task started at clock 10.0: the same 0.375 + 0.25 must fail against 10.0 + 0.5, not against 0.5 or a fresh budget
+        _, entry, _, _ = await self.attempt_with(pool_wait=0.375, processing=0.25, budget=0.5, start=10.0)
+        self.assertEqual(entry["start"], 10.0)
+        self.assertEqual((entry["outcome"], entry["code"]), ("client_deadline", "late_completion"))
+
+    async def test_remaining_in_flight_budget_counts_from_task_start_not_from_the_wait_call(self):
+        # the task started 0.45 s ago (e.g. queued for a pooled connection before post() was reached); 0.15 s of the
+        # 0.6 s budget remain, so a hung request must be abandoned after ~0.15 s, never after a fresh 0.6 s
+        import time
+
+        async def hung(index):
+            await asyncio.Event().wait()
+
+        started = time.monotonic()
+        (outcome, _, code, _, _) = await lg.execute_request(hung, "predict", 3, time.monotonic, 0.6, start=started - 0.45)
+        elapsed = time.monotonic() - started
+        self.assertEqual((outcome, code), ("client_deadline", "client_total_deadline"))
+        self.assertLess(elapsed, 0.35)                                 # ~0.15 expected; a restarted budget would take ~0.6
+
+
 def lg_monotonic():
     import time
     return time.monotonic

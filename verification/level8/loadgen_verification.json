@@ -92,7 +92,7 @@
    "errors": 0,
    "note": "the 3 skips are 2 opt-in engine tests and the flat-image module reporting NOT APPLICABLE in the repository layout"
   },
-  "stability": "After one timing-sensitive socket test was widened, the harness suite passed five consecutive runs: three standalone, one with four CPU-bound processes sharing the container, and one inside the full 217-test suite. Before that change the same test failed once in the full-suite run (a 0.25 s total deadline across 25 concurrent connections), which is recorded here.",
+  "stability": "HISTORICAL (L8-2DH), qualified in L8-2DHV: two socket tests were adjusted, not one (see l82dhv_reconciliation). After the adjustments the then-37-test harness suite passed five consecutive runs: three standalone, one with four CPU-bound processes sharing the container, and one inside the full 217-test suite. Before the adjustments one socket test failed once in a full-suite run; the failure message was not retained, so the cause is NOT established. Host load and many concurrent connections against a 0.25 s total deadline are a hypothesis only.",
   "historical_fixture": "P2 repetition 3 arithmetic reproduced from synthetic records: whole run scheduled 4000, attempted 3642, successful 3642, missed 358, scheduled-arrival success 0.9105 (denominator 4000); measurement scheduled 3000, attempted 2642, successful 2642, missed 358, scheduled-arrival success 0.880667 (denominator 3000); the rates are separately labelled cohort blocks"
  },
  "socket_level_results": [
@@ -330,5 +330,232 @@
  "source_hashes": {
   "tests/level8_loadgen.py": "58e6068c333707a0c38d6194fed49c642f0482c7b9bf57bf41185b35c5c681d9",
   "tests/test_level8_loadgen.py": "66c323b6eeb0fe29808cc745b4f23afb63d38f0937ebb5dd4f052648ac1a2cf6"
+ },
+ "l82dhv_reconciliation": {
+  "purpose": "Reconcile the L8-2DH evidence with the test adjustments actually made, and establish deterministically that pool waiting consumes the original absolute deadline. Commit 78841f512b5ac3f40356a861b5b8864ae238d69f is unchanged; this section is new. The historical operational result remains FAIL; verification/level8/mixed_load.json is byte-identical.",
+  "parent_commit_sha": "78841f512b5ac3f40356a861b5b8864ae238d69f",
+  "statement_qualified": {
+   "field": "test_results.stability",
+   "original_text": "After one timing-sensitive socket test was widened, the harness suite passed five consecutive runs: three standalone, one with four CPU-bound processes sharing the container, and one inside the full 217-test suite. Before that change the same test failed once in the full-suite run (a 0.25 s total deadline across 25 concurrent connections), which is recorded here.",
+   "issue": "presented an inferred cause as the failure condition and described only one adjusted test",
+   "replacement": "see test_results.stability above"
+  },
+  "socket_test_adjustments": [
+   {
+    "test": "test_mixed_outcomes_over_real_sockets",
+    "original_total_deadline_s": 0.25,
+    "revised_total_deadline_s": 0.6,
+    "original_slow_response_delay_s": 0.6,
+    "revised_slow_response_delay_s": 1.5,
+    "exact_outcome_assertions_unchanged": true,
+    "asserted_outcomes": {
+     "success": 5,
+     "http_error": 10,
+     "client_deadline": 5,
+     "transport_failure": 5
+    },
+    "original_failure": "one full-suite failure occurred; the failure message was not retained",
+    "cause_status": "NOT ESTABLISHED; host load and concurrent connections are a hypothesized explanation only",
+    "rationale": "more timing headroom for 25 concurrent connections"
+   },
+   {
+    "test": "test_pool_contention_counts_against_the_total_deadline",
+    "original_response_delay_s": 0.15,
+    "revised_response_delay_s": 0.2,
+    "original_total_deadline_s": 0.45,
+    "revised_total_deadline_s": 0.6,
+    "original_assertions": "exactly four successes and two client deadlines, at most two open connections",
+    "revised_assertions": "successes + client deadlines = 6; at least 2 successes; at least 1 client deadline; every client deadline carries the code client_total_deadline; at most 2 open connections",
+    "exact_outcome_split_relaxed": true,
+    "original_l82dh_evidence_omitted_this_adjustment": true,
+    "rationale": "reduce sensitivity to real socket scheduling (the exact split depends on host speed)",
+    "assessment": "the revised assertions are weaker than the exact split and are NOT retained as proof of deadline accounting; the exact accounting contract is established by the deterministic PoolWaitDeadlineTests below, and this test is retained as realistic-behavior evidence under contention"
+   }
+  ],
+  "historical_verification_runs": "the five passing runs after the L8-2DH adjustments (three standalone, one under CPU saturation, one in the 217-test suite) predate and do not include the five tests added in L8-2DHV",
+  "existing_deterministic_coverage_review": {
+   "establishes": [
+    "total in-flight budget is not restarted between phases (test_several_short_phases_cannot_exceed_the_total_deadline; timer ordering is deterministic)",
+    "connect delay and slow body share one budget (test_slow_body_and_connect_delay_share_one_budget)",
+    "late completion at/after the deadline is client_deadline/late_completion (test_success_before_exactly_at_and_after_the_deadline)",
+    "cancellation releases capacity (test_cancellation_during_an_attempt_is_recorded_and_cleans_up)"
+   ],
+   "did_not_establish": [
+    "a request whose pool wait and post-acquisition processing each fit the budget but together exceed it, through the attempt() path with capacity accounting",
+    "that the deadline is measured from the recorded task start (the start parameter) in both the late-completion check and the in-flight timeout",
+    "the equality boundary across two stages"
+   ],
+   "additional_tests_required": true
+  },
+  "new_deterministic_tests": {
+   "class": "PoolWaitDeadlineTests",
+   "count": 5,
+   "method": "fake clock; a controlled event grants the pooled connection; binary-exact fractions for exact equality; the real attempt() and execute_request() code paths and the real admission ledger",
+   "tests": [
+    {
+     "name": "test_pool_wait_plus_processing_beyond_the_deadline_fails_although_each_part_fits",
+     "scenario": "budget 0.5 s; pool wait 0.375 s; processing 0.25 s; total 0.625 s (the 600 ms / 450 ms / 200 ms / 650 ms scenario scaled to exact binary fractions)",
+     "assertions": [
+      "each part alone is below the budget (asserted)",
+      "outcome client_deadline, code late_completion, status 200",
+      "reason contains completed_after_deadline_as_success",
+      "capacity outstanding while waiting for the pool is 1, and 0 afterwards with zero double releases",
+      "task done"
+     ]
+    },
+    {
+     "name": "test_pool_wait_plus_processing_within_the_deadline_succeeds",
+     "scenario": "0.25 s + 0.125 s within 0.5 s",
+     "assertions": [
+      "outcome success",
+      "capacity released"
+     ]
+    },
+    {
+     "name": "test_the_deadline_equality_boundary_across_both_stages",
+     "scenario": "0.25 s + 0.25 s = 0.5 s exactly; and 0.25 s + 0.2499 s",
+     "assertions": [
+      "equality is client_deadline/late_completion",
+      "just under is success"
+     ]
+    },
+    {
+     "name": "test_deadline_is_measured_from_the_recorded_task_start",
+     "scenario": "task start at clock 10.0 with the same stages",
+     "assertions": [
+      "entry start is 10.0",
+      "outcome client_deadline/late_completion"
+     ]
+    },
+    {
+     "name": "test_remaining_in_flight_budget_counts_from_task_start_not_from_the_wait_call",
+     "scenario": "task started 0.45 s ago with a 0.6 s budget and a hung request (real timer, large margin)",
+     "assertions": [
+      "outcome client_deadline, code client_total_deadline",
+      "elapsed below 0.35 s (about 0.15 s expected; a restarted budget would take about 0.6 s)"
+     ]
+    }
+   ]
+  },
+  "negative_controls": {
+   "method": "disposable external scratch copies of the committed harness mutated at the real deadline-enforcement path; the real test module run unmodified against each mutant in a container; mutants deleted afterwards; the committed harness was never touched",
+   "results": [
+    {
+     "mutant": "A: the deadline restarts once the response is in hand (deadline = clock() + deadline_s inserted before classify_response)",
+     "detected": true,
+     "failing_tests": [
+      "test_success_before_exactly_at_and_after_the_deadline (3 sub-cases: finish 2.0, 2.0001, 30.0)",
+      "test_deadline_is_measured_from_the_recorded_task_start",
+      "test_pool_wait_plus_processing_beyond_the_deadline_fails_although_each_part_fits",
+      "test_the_deadline_equality_boundary_across_both_stages"
+     ],
+     "totals": "42 ran, 6 failures"
+    },
+    {
+     "mutant": "B: the in-flight wait uses a fresh full budget (timeout=deadline_s) instead of the remaining budget",
+     "detected": true,
+     "failing_tests": [
+      "test_remaining_in_flight_budget_counts_from_task_start_not_from_the_wait_call"
+     ],
+     "assertion": "0.602 s not less than 0.35 s",
+     "totals": "42 ran, 1 failure",
+     "note": "a first attempt at this mutant had a syntax error and a mount failure and was discarded; the result recorded is from a valid re-run"
+    },
+    {
+     "mutant": "C: the recorded task start is ignored (deadline = clock() + deadline_s)",
+     "detected": true,
+     "failing_tests": [
+      "test_remaining_in_flight_budget_counts_from_task_start_not_from_the_wait_call"
+     ],
+     "totals": "42 ran, 1 failure"
+    }
+   ],
+   "control": "the unmutated harness: 42 ran, OK",
+   "limits": "mutants B and C are detected only by the one real-timer test; a mutant that excludes only the connection-acquisition time inside httpx cannot be expressed at the harness boundary because acquisition happens inside the awaited post() call"
+  },
+  "new_verification_results": {
+   "harness_module": {
+    "ran": 42,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "passed_twice_consecutively": true
+   },
+   "full_level8_suite_repository_layout": {
+    "ran": 222,
+    "skipped": 3,
+    "failures": 0,
+    "errors": 0,
+    "passed": 219
+   },
+   "regression_skips": [
+    {
+     "test": "tests.test_level8_engine.*.test_90_serial_latency_smoke",
+     "reason": "skipped unless LEVEL8_PERF=1"
+    },
+    {
+     "test": "tests.test_level8_engine.*.test_99_write_evidence_if_requested",
+     "reason": "skipped unless LEVEL8_EVIDENCE_OUT is set"
+    },
+    {
+     "test": "tests.test_level8_image (whole module)",
+     "reason": "NOT APPLICABLE in the repository layout; it runs in the flat image"
+    }
+   ],
+   "frozen_file_guard": "passed with FROZEN_REQUIRE_LOCAL=1"
+  },
+  "acceptance_gates": [
+   {
+    "gate": "both socket-test adjustments accurately documented",
+    "result": "PASS"
+   },
+   {
+    "gate": "original failure cause identified as inferred",
+    "result": "PASS"
+   },
+   {
+    "gate": "relaxed pool-contention assertions disclosed",
+    "result": "PASS"
+   },
+   {
+    "gate": "deterministic verification that pool waiting consumes the original absolute deadline",
+    "result": "PASS"
+   },
+   {
+    "gate": "negative controls executed and detected",
+    "result": "PASS",
+    "detail": "three mutants, all detected"
+   },
+   {
+    "gate": "all required tests pass",
+    "result": "PASS"
+   },
+   {
+    "gate": "committed load generator byte-identical",
+    "result": "PASS"
+   },
+   {
+    "gate": "historical mixed-load evidence byte-identical",
+    "result": "PASS"
+   },
+   {
+    "gate": "no production behavior changed",
+    "result": "PASS"
+   },
+   {
+    "gate": "historical operational acceptance remains FAIL; holdout uncertainty unchanged",
+    "result": "PASS"
+   }
+  ],
+  "source_hashes": {
+   "tests/level8_loadgen.py": "58e6068c333707a0c38d6194fed49c642f0482c7b9bf57bf41185b35c5c681d9",
+   "tests/test_level8_loadgen.py": "1a9d28b18d0a77af6b40830b8834b048dba96bd9c8e08f962ebb93004dabf48f"
+  },
+  "remaining_limitations": [
+   "The deadline remains cooperative and application-level.",
+   "Tests B/C detection relies on one real-timer test with a large margin.",
+   "The failure cause of the original flaky run is unknown.",
+   "No operational benchmark was rerun."
+  ]
  }
 }
