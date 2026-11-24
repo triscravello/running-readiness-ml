@@ -1,0 +1,6761 @@
+{
+ "schema_version": 2,
+ "overall_operational_result": "FAIL",
+ "document_note": "L8-2DV reconciled evidence. Section original_l82d_evidence is the unmodified L8-2D document; every other section is new and separately identified.",
+ "original_l82d_evidence_sha256": "017dffa6e1aafaa68ed5beb7a85a7cab2b26efb27cc545c9e9d44cfe32e183b6",
+ "original_l82d_evidence": {
+  "schema_version": 1,
+  "scope": "Operational behavior of the committed Level 8 service under constrained concurrent workloads, and flat-image compatibility. Engineering evidence from one host; not a production SLO, not model validity, not a hard network response-time guarantee.",
+  "application_commit_sha": "251c4f6b9127942b351c089ed91504befa001e41",
+  "overall": "FAIL",
+  "failed_gates": [
+   "P2_r3: offered prediction workload valid (no missed arrivals, scheduling-lag p99 <= 5 ms)",
+   "P2_r3: prediction p95 degradation vs matched P0_r3",
+   "P2_r3: explanation successful p95 <= 150 ms",
+   "P2_r3: at least 95% successful explanations",
+   "P2_r3: zero unexpected worker restarts"
+  ],
+  "not_verified_gates": [],
+  "environment": {
+   "host_and_docker_vm": {
+    "logical_cpus": 8,
+    "cpu_model": "Intel(R) Core(TM) i5-8257U @ 1.40GHz (4 cores / 8 threads)",
+    "architecture": "x86_64",
+    "memory_total_bytes": 6208516096,
+    "docker": "Docker Desktop 29.5.3, Linux VM kernel 6.12.76-linuxkit, cgroup v2",
+    "other_load": "two unrelated PostgreSQL containers present (one running, idle and healthy; one exited)"
+   },
+   "server_container": {
+    "image": "flat-layout image derived from running-readiness-level7:4.0.0 + the ten hash-locked Level 8 wheels + the committed F1 Level 7 service + the committed Level 8 modules",
+    "image_id": "sha256:e9a835677fa7",
+    "instrumented_variant_image_id": "sha256:67924bcdc3ec (adds one scratch wrapper module with a polled /__bench/diag route; used for P4 and P5 only)",
+    "cpu_quota": "400000 per 100000 us (docker --cpus 4)",
+    "cpuset": "none configured (no CPU affinity)",
+    "memory_limit": "1 GiB, swap limit equal",
+    "filesystem": "read-only with tmpfs /tmp",
+    "launcher": "python -m uvicorn level8_service:app --workers 1 (no reload)",
+    "log_level": "warning",
+    "platform": "linux/amd64",
+    "python": "3.15.2",
+    "torch": "2.15.0+cpu",
+    "numpy": "2.5.4",
+    "fastapi": "0.162.0",
+    "uvicorn": "0.54.0",
+    "pydantic": "2.14.2",
+    "starlette": "1.10.0",
+    "captum": "0.9.0",
+    "matplotlib": "3.11.2",
+    "torch_configuration": "unchanged: parent default; child 1 intra-op and 1 inter-op thread",
+    "dispatcher_configuration": "unchanged defaults"
+   },
+   "load_generator_container": {
+    "image": "same image plus httpx 0.28.1 (test-only layer)",
+    "cpu_quota": "2 CPUs",
+    "memory_limit": "512 MiB",
+    "timeout_s": 2.0,
+    "max_connections": 128,
+    "max_backlog_per_kind": 100,
+    "persistent_connections": true
+   },
+   "network": "isolated internal Docker network (no external access, no published host ports)",
+   "cpu_isolation_caveat": "A CPU quota limits CPU time, it does not give dedicated cores: server and generator share a 4-core/8-thread host (and the Docker VM) with each other and with whatever else runs on it.",
+   "monitoring_overhead": "cgroup/proc sampling by docker exec every 5 s (a short shell process inside the server container); instrumented runs additionally poll one diagnostics route at 1 Hz. The unmodified-application runs (P0-P3) have no per-request instrumentation."
+  },
+  "methodology": {
+   "profiles": "P0 predict 100/s open-loop; P1 +4 closed-loop explanation callers; P2 +40/s open-loop explanations; P3 four closed-loop explanation callers only; P4 100/s predict + one synchronized burst of 32 explanations at +1 s of a 10 s window (after 10 s warm-up); P5 five-minute soak with four callers (after 10 s warm-up)",
+   "windows": "P0-P3: 10 s warm-up + 30 s measurement; three matched repetitions of P0-P2 in a balanced cyclic order; P4 three times; P5 once",
+   "server_lifecycle_per_run": "fresh container per run; readiness = health 200 and first successful explanation; resource sample; load; 3 s drain; resource sample; docker stop (15 s grace); exit code, OOM flag and logs recorded",
+   "percentiles": "linear interpolation between closest ranks",
+   "latency_definitions": "request = actual start to completion; scheduled = scheduled arrival to completion (open-loop only); all-completed includes non-200 responses; successful = 200 with a valid, associated payload",
+   "degradation_gate": "mixed prediction p95 minus matched P0 p95 <= max(20% of baseline, 5 ms); P4/P5 use the median of the three P0 repetitions",
+   "generator_validity": "offered workload considered valid when no arrival is missed and scheduling-lag p99 <= 5 ms; generator CPU and event-loop lag are recorded to separate generator saturation from server saturation",
+   "instrumented_vs_unmodified": "P0-P3 measure the unmodified committed application; P4 and P5 use a wrapper that adds one polled diagnostics route (needed for dispatcher high-water marks) and are compared with the unmodified P0 baseline",
+   "failure_policy": "no run was discarded or selected; one supplementary repetition of P2 was added after an anomaly and is reported separately"
+  },
+  "workload_inputs": {
+   "count": 50,
+   "composition": "40 development-range draws + 10 near-threshold draws (smallest |logit| of a 20,000-point development-range pool)",
+   "seed": 42,
+   "construction": "numpy.random.default_rng(42) via tests/level8_oracle.build_grids; synthetic; no holdout, no health data",
+   "expected_results": "prediction probability/decision per input computed once from the repository-layout Level 7 runtime and embedded in the load generator",
+   "request_result_association": "every response is checked against the expected result for the exact input that was sent"
+  },
+  "run_order": [
+   "P0_r1",
+   "P1_r1",
+   "P2_r1",
+   "P1_r2",
+   "P2_r2",
+   "P0_r2",
+   "P2_r3",
+   "P0_r3",
+   "P1_r3",
+   "P3_r1",
+   "P4_r1",
+   "P4_r2",
+   "P4_r3",
+   "P5_r1"
+  ],
+  "supplementary_runs_reported_separately": {
+   "P2_r4_supplementary": {
+    "why": "one extra P2 repetition after the P2_r3 anomaly, to test reproducibility; not a replacement for any run",
+    "prediction": {
+     "completed": 3000,
+     "successful": 3000,
+     "success_fraction": 1.0,
+     "status_counts": {
+      "200": 3000
+     },
+     "latency_request_successful": {
+      "n": 3000,
+      "p50_ms": 4.087,
+      "p95_ms": 5.807,
+      "p99_ms": 7.287,
+      "max_ms": 12.091,
+      "mean_ms": 4.267
+     },
+     "open_loop": {
+      "scheduled_rate_per_s": 100.0,
+      "scheduled_in_window": 3000,
+      "missed_arrivals_total": 0,
+      "attempted_in_window": 3000,
+      "scheduling_lag_ms": {
+       "p50": 1.071,
+       "p99": 2.398,
+       "max": 4.094
+      }
+     }
+    },
+    "explanation": {
+     "completed": 1200,
+     "successful": 1200,
+     "success_fraction": 1.0,
+     "status_counts": {
+      "200": 1200
+     },
+     "latency_request_successful": {
+      "n": 1200,
+      "p50_ms": 23.188,
+      "p95_ms": 28.849,
+      "p99_ms": 31.269,
+      "max_ms": 43.211,
+      "mean_ms": 23.508
+     }
+    },
+    "worker_restarted": false
+   }
+  },
+  "incident_P2_r3": {
+   "run": "P2_r3",
+   "facts": {
+    "worker_child_pid_changed_during_the_run": true,
+    "explanation_status_counts": {
+     "200": 931,
+     "503": 244,
+     "504": 1
+    },
+    "explanation_error_codes": {
+     "explanation_overloaded": 8,
+     "explanation_deadline_exceeded": 1,
+     "explanation_unavailable": 236
+    },
+    "prediction_p95_request_ms": 2060.297,
+    "missed_prediction_arrivals": 358,
+    "generator_cpu_cores_used_of_2": 0.552,
+    "cgroup_throttle_periods_added": 2,
+    "cgroup_throttled_ms_added": 689.5
+   },
+   "interpretation": "An explanation exceeded its execution deadline once (one 504), the dispatcher replaced the worker, explanations were unavailable for the replacement's startup, and /predict stalled for about two seconds while the replacement started. Generator CPU was far below its quota, so the stall is attributed to the server side. The trigger of the deadline event was not established and the event did not recur in 12 other runs or the supplementary repetition. A contention between the replacement's start-up and the parent for the 4-CPU quota is consistent with the throttling and stall but is NOT proven.",
+   "treatment": "reported as measured; the run is part of the prescribed three repetitions and its gates fail; it was not repeated to replace it"
+  },
+  "runs": {
+   "P0_r1": {
+    "label": "P0_r1",
+    "profile": "P0",
+    "application": "unmodified committed application",
+    "loadgen_rc": 0,
+    "error": null,
+    "startup": {
+     "health_s": 2.74,
+     "first_explanation_s": 5.24,
+     "includes_container_creation": true
+    },
+    "stop_s": 1.41,
+    "exit_code_and_oom_killed": "0 false",
+    "traceback_in_server_log": false,
+    "graceful_shutdown_logged": false,
+    "client": {
+     "timeout_s": 2.0,
+     "max_connections": 128,
+     "max_backlog": 100,
+     "persistent_connections": true,
+     "percentile_method": "linear interpolation between closest ranks (numpy default)",
+     "generator_cpu_cores_used": 0.37,
+     "event_loop_lag_ms": {
+      "p99": 2.534,
+      "max": 25.38
+     }
+    },
+    "config": {
+     "bucket": 0.0,
+     "burst": 0,
+     "burst_at": 1.0,
+     "explain_callers": 0,
+     "explain_rate": 0.0,
+     "measure": 30.0,
+     "predict_rate": 100.0,
+     "warmup": 10.0
+    },
+    "predict": {
+     "completed": 3000,
+     "successful": 3000,
+     "success_fraction": 1.0,
+     "status_counts": {
+      "200": 3000
+     },
+     "error_code_counts": {},
+     "client_timeouts": 0,
+     "connection_failures": 0,
+     "contract_or_association_violations": 0,
+     "violation_kinds": {},
+     "latency_request_successful": {
+      "n": 3000,
+      "p50_ms": 6.236,
+      "p95_ms": 7.984,
+      "p99_ms": 9.949,
+      "max_ms": 39.346,
+      "mean_ms": 6.109
+     },
+     "latency_request_all_completed": {
+      "n": 3000,
+      "p50_ms": 6.236,
+      "p95_ms": 7.984,
+      "p99_ms": 9.949,
+      "max_ms": 39.346,
+      "mean_ms": 6.109
+     },
+     "latency_scheduled_all_completed": {
+      "n": 3000,
+      "p50_ms": 7.587,
+      "p95_ms": 9.952,
+      "p99_ms": 11.987,
+      "max_ms": 40.073,
+      "mean_ms": 7.54
+     },
+     "latency_scheduled_successful": {
+      "n": 3000,
+      "p50_ms": 7.587,
+      "p95_ms": 9.952,
+      "p99_ms": 11.987,
+      "max_ms": 40.073,
+      "mean_ms": 7.54
+     },
+     "throughput_completed_per_s": 100.0,
+     "throughput_successful_per_s": 100.0,
+     "max_inflight": 6,
+     "open_loop": {
+      "scheduled_rate_per_s": 100.0,
+      "scheduled_in_window": 3000,
+      "missed_arrivals_total": 0,
+      "attempted_in_window": 3000,
+      "scheduling_lag_ms": {
+       "p50": 1.607,
+       "p99": 2.37,
+       "max": 19.27
+      }
+     }
+    },
+    "explain": {},
+    "resources": {
+     "cgroup_memory_limit_bytes": 1073741824,
+     "memory_current_post_readiness_mib": 386.5,
+     "memory_peak_container_lifetime_mib": 388.8,
+     "memory_peak_fraction_of_limit": 0.3797,
+     "memory_current_post_drain_mib": 387.0,
+     "memory_current_sampled_max_mib": 387.4,
+     "oom_kill_events": 0,
+     "docker_oom_killed": [
+      "false"
+     ],
+     "cpu_throttling": {
+      "nr_throttled": 0,
+      "throttled_ms": 0.0,
+      "nr_periods": 425,
+      "server_cpu_cores_used_during_run": 0.296
+     },
+     "post_readiness": {
+      "parent": {
+       "role": "parent",
+       "pid": 1,
+       "rss_kb": 273460,
+       "threads": 11,
+       "fds": 14
+      },
+      "child": {
+       "role": "child",
+       "pid": 17,
+       "rss_kb": 292020,
+       "threads": 8,
+       "fds": 9
+      }
+     },
+     "post_drain": {
+      "parent": {
+       "role": "parent",
+       "pid": 1,
+       "rss_kb": 274660,
+       "threads": 11,
+       "fds": 14
+      },
+      "child": {
+       "role": "child",
+       "pid": 17,
+       "rss_kb": 292020,
+       "threads": 8,
+       "fds": 9
+      }
+     },
+     "note": "RSS values are per process and are not summed; container memory is the cgroup figure."
+    }
+   },
+   "P1_r1": {
+    "label": "P1_r1",
+    "profile": "P1",
+    "application": "unmodified committed application",
+    "loadgen_rc": 0,
+    "error": null,
+    "startup": {
+     "health_s": 2.56,
+     "first_explanation_s": 5.15,
+     "includes_container_creation": true
+    },
+    "stop_s": 1.29,
+    "exit_code_and_oom_killed": "0 false",
+    "traceback_in_server_log": false,
+    "graceful_shutdown_logged": false,
+    "client": {
+     "timeout_s": 2.0,
+     "max_connections": 128,
+     "max_backlog": 100,
+     "persistent_connections": true,
+     "percentile_method": "linear interpolation between closest ranks (numpy default)",
+     "generator_cpu_cores_used": 0.33,
+     "event_loop_lag_ms": {
+      "p99": 1.909,
+      "max": 21.041
+     }
+    },
+    "config": {
+     "bucket": 0.0,
+     "burst": 0,
+     "burst_at": 1.0,
+     "explain_callers": 4,
+     "explain_rate": 0.0,
+     "measure": 30.0,
+     "predict_rate": 100.0,
+     "warmup": 10.0
+    },
+    "predict": {
+     "completed": 3000,
+     "successful": 3000,
+     "success_fraction": 1.0,
+     "status_counts": {
+      "200": 3000
+     },
+     "error_code_counts": {},
+     "client_timeouts": 0,
+     "connection_failures": 0,
+     "contract_or_association_violations": 0,
+     "violation_kinds": {},
+     "latency_request_successful": {
+      "n": 3000,
+      "p50_ms": 3.519,
+      "p95_ms": 5.672,
+      "p99_ms": 8.142,
+      "max_ms": 23.631,
+      "mean_ms": 3.893
+     },
+     "latency_request_all_completed": {
+      "n": 3000,
+      "p50_ms": 3.519,
+      "p95_ms": 5.672,
+      "p99_ms": 8.142,
+      "max_ms": 23.631,
+      "mean_ms": 3.893
+     },
+     "latency_scheduled_all_completed": {
+      "n": 3000,
+      "p50_ms": 4.987,
+      "p95_ms": 7.256,
+      "p99_ms": 9.785,
+      "max_ms": 25.063,
+      "mean_ms": 5.184
+     },
+     "latency_scheduled_successful": {
+      "n": 3000,
+      "p50_ms": 4.987,
+      "p95_ms": 7.256,
+      "p99_ms": 9.785,
+      "max_ms": 25.063,
+      "mean_ms": 5.184
+     },
+     "throughput_completed_per_s": 100.0,
+     "throughput_successful_per_s": 100.0,
+     "max_inflight": 3,
+     "open_loop": {
+      "scheduled_rate_per_s": 100.0,
+      "scheduled_in_window": 3000,
+      "missed_arrivals_total": 0,
+      "attempted_in_window": 3000,
+      "scheduling_lag_ms": {
+       "p50": 1.436,
+       "p99": 2.082,
+       "max": 9.79
+      }
+     }
+    },
+    "explain": {
+     "completed": 1905,
+     "successful": 1905,
+     "success_fraction": 1.0,
+     "status_counts": {
+      "200": 1905
+     },
+     "error_code_counts": {},
+     "client_timeouts": 0,
+     "connection_failures": 0,
+     "contract_or_association_violations": 0,
+     "violation_kinds": {},
+     "latency_request_successful": {
+      "n": 1905,
+      "p50_ms": 61.416,
+      "p95_ms": 72.108,
+      "p99_ms": 84.185,
+      "max_ms": 168.797,
+      "mean_ms": 62.993
+     },
+     "latency_request_all_completed": {
+      "n": 1905,
+      "p50_ms": 61.416,
+      "p95_ms": 72.108,
+      "p99_ms": 84.185,
+      "max_ms": 168.797,
+      "mean_ms": 62.993
+     },
+     "latency_scheduled_all_completed": {
+      "n": 0
+     },
+     "latency_scheduled_successful": {
+      "n": 0
+     },
+     "throughput_completed_per_s": 63.5,
+     "throughput_successful_per_s": 63.5,
+     "max_inflight": 4
+    },
+    "resources": {
+     "cgroup_memory_limit_bytes": 1073741824,
+     "memory_current_post_readiness_mib": 386.6,
+     "memory_peak_container_lifetime_mib": 388.8,
+     "memory_peak_fraction_of_limit": 0.3797,
+     "memory_current_post_drain_mib": 387.2,
+     "memory_current_sampled_max_mib": 387.8,
+     "oom_kill_events": 0,
+     "docker_oom_killed": [
+      "false"
+     ],
+     "cpu_throttling": {
+      "nr_throttled": 0,
+      "throttled_ms": 0.0,
+      "nr_periods": 427,
+      "server_cpu_cores_used_during_run": 1.174
+     },
+     "post_readiness": {
+      "parent": {
+       "role": "parent",
+       "pid": 1,
+       "rss_kb": 273124,
+       "threads": 11,
+       "fds": 14
+      },
+      "child": {
+       "role": "child",
+       "pid": 17,
+       "rss_kb": 291300,
+       "threads": 8,
+       "fds": 9
+      }
+     },
+     "post_drain": {
+      "parent": {
+       "role": "parent",
+       "pid": 1,
+       "rss_kb": 274156,
+       "threads": 12,
+       "fds": 14
+      },
+      "child": {
+       "role": "child",
+       "pid": 17,
+       "rss_kb": 291628,
+       "threads": 8,
+       "fds": 9
+      }
+     },
+     "note": "RSS values are per process and are not summed; container memory is the cgroup figure."
+    }
+   },
+   "P2_r1": {
+    "label": "P2_r1",
+    "profile": "P2",
+    "application": "unmodified committed application",
+    "loadgen_rc": 0,
+    "error": null,
+    "startup": {
+     "health_s": 2.76,
+     "first_explanation_s": 5.21,
+     "includes_container_creation": true
+    },
+    "stop_s": 1.29,
+    "exit_code_and_oom_killed": "0 false",
+    "traceback_in_server_log": false,
+    "graceful_shutdown_logged": false,
+    "client": {
+     "timeout_s": 2.0,
+     "max_connections": 128,
+     "max_backlog": 100,
+     "persistent_connections": true,
+     "percentile_method": "linear interpolation between closest ranks (numpy default)",
+     "generator_cpu_cores_used": 0.337,
+     "event_loop_lag_ms": {
+      "p99": 2.124,
+      "max": 23.073
+     }
+    },
+    "config": {
+     "bucket": 0.0,
+     "burst": 0,
+     "burst_at": 1.0,
+     "explain_callers": 0,
+     "explain_rate": 40.0,
+     "measure": 30.0,
+     "predict_rate": 100.0,
+     "warmup": 10.0
+    },
+    "predict": {
+     "completed": 3000,
+     "successful": 3000,
+     "success_fraction": 1.0,
+     "status_counts": {
+      "200": 3000
+     },
+     "error_code_counts": {},
+     "client_timeouts": 0,
+     "connection_failures": 0,
+     "contract_or_association_violations": 0,
+     "violation_kinds": {},
+     "latency_request_successful": {
+      "n": 3000,
+      "p50_ms": 4.228,
+      "p95_ms": 6.533,
+      "p99_ms": 9.522,
+      "max_ms": 31.768,
+      "mean_ms": 4.606
+     },
+     "latency_request_all_completed": {
+      "n": 3000,
+      "p50_ms": 4.228,
+      "p95_ms": 6.533,
+      "p99_ms": 9.522,
+      "max_ms": 31.768,
+      "mean_ms": 4.606
+     },
+     "latency_scheduled_all_completed": {
+      "n": 3000,
+      "p50_ms": 5.864,
+      "p95_ms": 9.08,
+      "p99_ms": 12.064,
+      "max_ms": 32.523,
+      "mean_ms": 6.208
+     },
+     "latency_scheduled_successful": {
+      "n": 3000,
+      "p50_ms": 5.864,
+      "p95_ms": 9.08,
+      "p99_ms": 12.064,
+      "max_ms": 32.523,
+      "mean_ms": 6.208
+     },
+     "throughput_completed_per_s": 100.0,
+     "throughput_successful_per_s": 100.0,
+     "max_inflight": 7,
+     "open_loop": {
+      "scheduled_rate_per_s": 100.0,
+      "scheduled_in_window": 3000,
+      "missed_arrivals_total": 0,
+      "attempted_in_window": 3000,
+      "scheduling_lag_ms": {
+       "p50": 1.223,
+       "p99": 2.808,
+       "max": 3.179
+      }
+     }
+    },
+    "explain": {
+     "completed": 1200,
+     "successful": 1200,
+     "success_fraction": 1.0,
+     "status_counts": {
+      "200": 1200
+     },
+     "error_code_counts": {},
+     "client_timeouts": 0,
+     "connection_failures": 0,
+     "contract_or_association_violations": 0,
+     "violation_kinds": {},
+     "latency_request_successful": {
+      "n": 1200,
+      "p50_ms": 21.294,
+      "p95_ms": 28.466,
+      "p99_ms": 73.761,
+      "max_ms": 98.496,
+      "mean_ms": 22.963
+     },
+     "latency_request_all_completed": {
+      "n": 1200,
+      "p50_ms": 21.294,
+      "p95_ms": 28.466,
+      "p99_ms": 73.761,
+      "max_ms": 98.496,
+      "mean_ms": 22.963
+     },
+     "latency_scheduled_all_completed": {
+      "n": 1200,
+      "p50_ms": 22.516,
+      "p95_ms": 30.638,
+      "p99_ms": 73.603,
+      "max_ms": 98.668,
+      "mean_ms": 24.037
+     },
+     "latency_scheduled_successful": {
+      "n": 1200,
+      "p50_ms": 22.516,
+      "p95_ms": 30.638,
+      "p99_ms": 73.603,
+      "max_ms": 98.668,
+      "mean_ms": 24.037
+     },
+     "throughput_completed_per_s": 40.0,
+     "throughput_successful_per_s": 40.0,
+     "max_inflight": 4,
+     "open_loop": {
+      "scheduled_rate_per_s": 40.0,
+      "scheduled_in_window": 1200,
+      "missed_arrivals_total": 0,
+      "attempted_in_window": 1200,
+      "scheduling_lag_ms": {
+       "p50": 1.064,
+       "p99": 2.727,
+       "max": 2.902
+      }
+     }
+    },
+    "resources": {
+     "cgroup_memory_limit_bytes": 1073741824,
+     "memory_current_post_readiness_mib": 386.4,
+     "memory_peak_container_lifetime_mib": 390.0,
+     "memory_peak_fraction_of_limit": 0.3808,
+     "memory_current_post_drain_mib": 387.7,
+     "memory_current_sampled_max_mib": 387.9,
+     "oom_kill_events": 0,
+     "docker_oom_killed": [
+      "false"
+     ],
+     "cpu_throttling": {
+      "nr_throttled": 0,
+      "throttled_ms": 0.0,
+      "nr_periods": 428,
+      "server_cpu_cores_used_during_run": 0.865
+     },
+     "post_readiness": {
+      "parent": {
+       "role": "parent",
+       "pid": 1,
+       "rss_kb": 273564,
+       "threads": 11,
+       "fds": 14
+      },
+      "child": {
+       "role": "child",
+       "pid": 17,
+       "rss_kb": 292104,
+       "threads": 8,
+       "fds": 9
+      }
+     },
+     "post_drain": {
+      "parent": {
+       "role": "parent",
+       "pid": 1,
+       "rss_kb": 275204,
+       "threads": 12,
+       "fds": 14
+      },
+      "child": {
+       "role": "child",
+       "pid": 17,
+       "rss_kb": 292432,
+       "threads": 8,
+       "fds": 9
+      }
+     },
+     "note": "RSS values are per process and are not summed; container memory is the cgroup figure."
+    }
+   },
+   "P1_r2": {
+    "label": "P1_r2",
+    "profile": "P1",
+    "application": "unmodified committed application",
+    "loadgen_rc": 0,
+    "error": null,
+    "startup": {
+     "health_s": 2.9,
+     "first_explanation_s": 5.4,
+     "includes_container_creation": true
+    },
+    "stop_s": 1.25,
+    "exit_code_and_oom_killed": "0 false",
+    "traceback_in_server_log": false,
+    "graceful_shutdown_logged": false,
+    "client": {
+     "timeout_s": 2.0,
+     "max_connections": 128,
+     "max_backlog": 100,
+     "persistent_connections": true,
+     "percentile_method": "linear interpolation between closest ranks (numpy default)",
+     "generator_cpu_cores_used": 0.361,
+     "event_loop_lag_ms": {
+      "p99": 2.111,
+      "max": 71.429
+     }
+    },
+    "config": {
+     "bucket": 0.0,
+     "burst": 0,
+     "burst_at": 1.0,
+     "explain_callers": 4,
+     "explain_rate": 0.0,
+     "measure": 30.0,
+     "predict_rate": 100.0,
+     "warmup": 10.0
+    },
+    "predict": {
+     "completed": 3000,
+     "successful": 3000,
+     "success_fraction": 1.0,
+     "status_counts": {
+      "200": 3000
+     },
+     "error_code_counts": {},
+     "client_timeouts": 0,
+     "connection_failures": 0,
+     "contract_or_association_violations": 0,
+     "violation_kinds": {},
+     "latency_request_successful": {
+      "n": 3000,
+      "p50_ms": 3.836,
+      "p95_ms": 6.566,
+      "p99_ms": 9.744,
+      "max_ms": 127.235,
+      "mean_ms": 4.533
+     },
+     "latency_request_all_completed": {
+      "n": 3000,
+      "p50_ms": 3.836,
+      "p95_ms": 6.566,
+      "p99_ms": 9.744,
+      "max_ms": 127.235,
+      "mean_ms": 4.533
+     },
+     "latency_scheduled_all_completed": {
+      "n": 3000,
+      "p50_ms": 5.173,
+      "p95_ms": 8.296,
+      "p99_ms": 11.26,
+      "max_ms": 142.373,
+      "mean_ms": 5.906
+     },
+     "latency_scheduled_successful": {
+      "n": 3000,
+      "p50_ms": 5.173,
+      "p95_ms": 8.296,
+      "p99_ms": 11.26,
+      "max_ms": 142.373,
+      "mean_ms": 5.906
+     },
+     "throughput_completed_per_s": 100.0,
+     "throughput_successful_per_s": 100.0,
+     "max_inflight": 13,
+     "open_loop": {
+      "scheduled_rate_per_s": 100.0,
+      "scheduled_in_window": 3000,
+      "missed_arrivals_total": 0,
+      "attempted_in_window": 3000,
+      "scheduling_lag_ms": {
+       "p50": 1.456,
+       "p99": 2.287,
+       "max": 33.563
+      }
+     }
+    },
+    "explain": {
+     "completed": 1836,
+     "successful": 1836,
+     "success_fraction": 1.0,
+     "status_counts": {
+      "200": 1836
+     },
+     "error_code_counts": {},
+     "client_timeouts": 0,
+     "connection_failures": 0,
+     "contract_or_association_violations": 0,
+     "violation_kinds": {},
+     "latency_request_successful": {
+      "n": 1836,
+      "p50_ms": 62.168,
+      "p95_ms": 74.977,
+      "p99_ms": 90.806,
+      "max_ms": 256.589,
+      "mean_ms": 65.342
+     },
+     "latency_request_all_completed": {
+      "n": 1836,
+      "p50_ms": 62.168,
+      "p95_ms": 74.977,
+      "p99_ms": 90.806,
+      "max_ms": 256.589,
+      "mean_ms": 65.342
+     },
+     "latency_scheduled_all_completed": {
+      "n": 0
+     },
+     "latency_scheduled_successful": {
+      "n": 0
+     },
+     "throughput_completed_per_s": 61.2,
+     "throughput_successful_per_s": 61.2,
+     "max_inflight": 4
+    },
+    "resources": {
+     "cgroup_memory_limit_bytes": 1073741824,
+     "memory_current_post_readiness_mib": 386.5,
+     "memory_peak_container_lifetime_mib": 390.4,
+     "memory_peak_fraction_of_limit": 0.3812,
+     "memory_current_post_drain_mib": 388.4,
+     "memory_current_sampled_max_mib": 388.2,
+     "oom_kill_events": 0,
+     "docker_oom_killed": [
+      "false"
+     ],
+     "cpu_throttling": {
+      "nr_throttled": 0,
+      "throttled_ms": 0.0,
+      "nr_periods": 426,
+      "server_cpu_cores_used_during_run": 1.181
+     },
+     "post_readiness": {
+      "parent": {
+       "role": "parent",
+       "pid": 1,
+       "rss_kb": 273516,
+       "threads": 11,
+       "fds": 14
+      },
+      "child": {
+       "role": "child",
+       "pid": 17,
+       "rss_kb": 292128,
+       "threads": 8,
+       "fds": 9
+      }
+     },
+     "post_drain": {
+      "parent": {
+       "role": "parent",
+       "pid": 1,
+       "rss_kb": 275492,
+       "threads": 18,
+       "fds": 14
+      },
+      "child": {
+       "role": "child",
+       "pid": 17,
+       "rss_kb": 292476,
+       "threads": 8,
+       "fds": 9
+      }
+     },
+     "note": "RSS values are per process and are not summed; container memory is the cgroup figure."
+    }
+   },
+   "P2_r2": {
+    "label": "P2_r2",
+    "profile": "P2",
+    "application": "unmodified committed application",
+    "loadgen_rc": 0,
+    "error": null,
+    "startup": {
+     "health_s": 2.73,
+     "first_explanation_s": 5.16,
+     "includes_container_creation": true
+    },
+    "stop_s": 1.34,
+    "exit_code_and_oom_killed": "0 false",
+    "traceback_in_server_log": false,
+    "graceful_shutdown_logged": false,
+    "client": {
+     "timeout_s": 2.0,
+     "max_connections": 128,
+     "max_backlog": 100,
+     "persistent_connections": true,
+     "percentile_method": "linear interpolation between closest ranks (numpy default)",
+     "generator_cpu_cores_used": 0.343,
+     "event_loop_lag_ms": {
+      "p99": 2.052,
+      "max": 32.738
+     }
+    },
+    "config": {
+     "bucket": 0.0,
+     "burst": 0,
+     "burst_at": 1.0,
+     "explain_callers": 0,
+     "explain_rate": 40.0,
+     "measure": 30.0,
+     "predict_rate": 100.0,
+     "warmup": 10.0
+    },
+    "predict": {
+     "completed": 3000,
+     "successful": 3000,
+     "success_fraction": 1.0,
+     "status_counts": {
+      "200": 3000
+     },
+     "error_code_counts": {},
+     "client_timeouts": 0,
+     "connection_failures": 0,
+     "contract_or_association_violations": 0,
+     "violation_kinds": {},
+     "latency_request_successful": {
+      "n": 3000,
+      "p50_ms": 4.404,
+      "p95_ms": 6.571,
+      "p99_ms": 8.675,
+      "max_ms": 33.935,
+      "mean_ms": 4.647
+     },
+     "latency_request_all_completed": {
+      "n": 3000,
+      "p50_ms": 4.404,
+      "p95_ms": 6.571,
+      "p99_ms": 8.675,
+      "max_ms": 33.935,
+      "mean_ms": 4.647
+     },
+     "latency_scheduled_all_completed": {
+      "n": 3000,
+      "p50_ms": 5.839,
+      "p95_ms": 9.242,
+      "p99_ms": 11.739,
+      "max_ms": 40.824,
+      "mean_ms": 6.166
+     },
+     "latency_scheduled_successful": {
+      "n": 3000,
+      "p50_ms": 5.839,
+      "p95_ms": 9.242,
+      "p99_ms": 11.739,
+      "max_ms": 40.824,
+      "mean_ms": 6.166
+     },
+     "throughput_completed_per_s": 100.0,
+     "throughput_successful_per_s": 100.0,
+     "max_inflight": 9,
+     "open_loop": {
+      "scheduled_rate_per_s": 100.0,
+      "scheduled_in_window": 3000,
+      "missed_arrivals_total": 0,
+      "attempted_in_window": 3000,
+      "scheduling_lag_ms": {
+       "p50": 1.562,
+       "p99": 2.369,
+       "max": 6.251
+      }
+     }
+    },
+    "explain": {
+     "completed": 1200,
+     "successful": 1200,
+     "success_fraction": 1.0,
+     "status_counts": {
+      "200": 1200
+     },
+     "error_code_counts": {},
+     "client_timeouts": 0,
+     "connection_failures": 0,
+     "contract_or_association_violations": 0,
+     "violation_kinds": {},
+     "latency_request_successful": {
+      "n": 1200,
+      "p50_ms": 21.549,
+      "p95_ms": 29.527,
+      "p99_ms": 72.218,
+      "max_ms": 145.24,
+      "mean_ms": 23.551
+     },
+     "latency_request_all_completed": {
+      "n": 1200,
+      "p50_ms": 21.549,
+      "p95_ms": 29.527,
+      "p99_ms": 72.218,
+      "max_ms": 145.24,
+      "mean_ms": 23.551
+     },
+     "latency_scheduled_all_completed": {
+      "n": 1200,
+      "p50_ms": 22.616,
+      "p95_ms": 31.73,
+      "p99_ms": 74.417,
+      "max_ms": 146.235,
+      "mean_ms": 24.759
+     },
+     "latency_scheduled_successful": {
+      "n": 1200,
+      "p50_ms": 22.616,
+      "p95_ms": 31.73,
+      "p99_ms": 74.417,
+      "max_ms": 146.235,
+      "mean_ms": 24.759
+     },
+     "throughput_completed_per_s": 40.0,
+     "throughput_successful_per_s": 40.0,
+     "max_inflight": 6,
+     "open_loop": {
+      "scheduled_rate_per_s": 40.0,
+      "scheduled_in_window": 1200,
+      "missed_arrivals_total": 0,
+      "attempted_in_window": 1200,
+      "scheduling_lag_ms": {
+       "p50": 0.949,
+       "p99": 2.335,
+       "max": 6.01
+      }
+     }
+    },
+    "resources": {
+     "cgroup_memory_limit_bytes": 1073741824,
+     "memory_current_post_readiness_mib": 386.5,
+     "memory_peak_container_lifetime_mib": 390.4,
+     "memory_peak_fraction_of_limit": 0.3813,
+     "memory_current_post_drain_mib": 388.4,
+     "memory_current_sampled_max_mib": 388.7,
+     "oom_kill_events": 0,
+     "docker_oom_killed": [
+      "false"
+     ],
+     "cpu_throttling": {
+      "nr_throttled": 0,
+      "throttled_ms": 0.0,
+      "nr_periods": 421,
+      "server_cpu_cores_used_during_run": 0.883
+     },
+     "post_readiness": {
+      "parent": {
+       "role": "parent",
+       "pid": 1,
+       "rss_kb": 273896,
+       "threads": 11,
+       "fds": 14
+      },
+      "child": {
+       "role": "child",
+       "pid": 17,
+       "rss_kb": 291848,
+       "threads": 8,
+       "fds": 9
+      }
+     },
+     "post_drain": {
+      "parent": {
+       "role": "parent",
+       "pid": 1,
+       "rss_kb": 275644,
+       "threads": 13,
+       "fds": 14
+      },
+      "child": {
+       "role": "child",
+       "pid": 17,
+       "rss_kb": 292272,
+       "threads": 8,
+       "fds": 9
+      }
+     },
+     "note": "RSS values are per process and are not summed; container memory is the cgroup figure."
+    }
+   },
+   "P0_r2": {
+    "label": "P0_r2",
+    "profile": "P0",
+    "application": "unmodified committed application",
+    "loadgen_rc": 0,
+    "error": null,
+    "startup": {
+     "health_s": 2.87,
+     "first_explanation_s": 5.35,
+     "includes_container_creation": true
+    },
+    "stop_s": 1.32,
+    "exit_code_and_oom_killed": "0 false",
+    "traceback_in_server_log": false,
+    "graceful_shutdown_logged": false,
+    "client": {
+     "timeout_s": 2.0,
+     "max_connections": 128,
+     "max_backlog": 100,
+     "persistent_connections": true,
+     "percentile_method": "linear interpolation between closest ranks (numpy default)",
+     "generator_cpu_cores_used": 0.391,
+     "event_loop_lag_ms": {
+      "p99": 2.949,
+      "max": 31.921
+     }
+    },
+    "config": {
+     "bucket": 0.0,
+     "burst": 0,
+     "burst_at": 1.0,
+     "explain_callers": 0,
+     "explain_rate": 0.0,
+     "measure": 30.0,
+     "predict_rate": 100.0,
+     "warmup": 10.0
+    },
+    "predict": {
+     "completed": 3000,
+     "successful": 3000,
+     "success_fraction": 1.0,
+     "status_counts": {
+      "200": 3000
+     },
+     "error_code_counts": {},
+     "client_timeouts": 0,
+     "connection_failures": 0,
+     "contract_or_association_violations": 0,
+     "violation_kinds": {},
+     "latency_request_successful": {
+      "n": 3000,
+      "p50_ms": 6.719,
+      "p95_ms": 10.066,
+      "p99_ms": 11.781,
+      "max_ms": 15.95,
+      "mean_ms": 6.724
+     },
+     "latency_request_all_completed": {
+      "n": 3000,
+      "p50_ms": 6.719,
+      "p95_ms": 10.066,
+      "p99_ms": 11.781,
+      "max_ms": 15.95,
+      "mean_ms": 6.724
+     },
+     "latency_scheduled_all_completed": {
+      "n": 3000,
+      "p50_ms": 8.117,
+      "p95_ms": 11.711,
+      "p99_ms": 13.481,
+      "max_ms": 18.332,
+      "mean_ms": 8.136
+     },
+     "latency_scheduled_successful": {
+      "n": 3000,
+      "p50_ms": 8.117,
+      "p95_ms": 11.711,
+      "p99_ms": 13.481,
+      "max_ms": 18.332,
+      "mean_ms": 8.136
+     },
+     "throughput_completed_per_s": 100.0,
+     "throughput_successful_per_s": 100.0,
+     "max_inflight": 8,
+     "open_loop": {
+      "scheduled_rate_per_s": 100.0,
+      "scheduled_in_window": 3000,
+      "missed_arrivals_total": 0,
+      "attempted_in_window": 3000,
+      "scheduling_lag_ms": {
+       "p50": 1.261,
+       "p99": 2.349,
+       "max": 5.768
+      }
+     }
+    },
+    "explain": {},
+    "resources": {
+     "cgroup_memory_limit_bytes": 1073741824,
+     "memory_current_post_readiness_mib": 386.8,
+     "memory_peak_container_lifetime_mib": 389.0,
+     "memory_peak_fraction_of_limit": 0.3799,
+     "memory_current_post_drain_mib": 387.5,
+     "memory_current_sampled_max_mib": 387.6,
+     "oom_kill_events": 0,
+     "docker_oom_killed": [
+      "false"
+     ],
+     "cpu_throttling": {
+      "nr_throttled": 0,
+      "throttled_ms": 0.0,
+      "nr_periods": 425,
+      "server_cpu_cores_used_during_run": 0.318
+     },
+     "post_readiness": {
+      "parent": {
+       "role": "parent",
+       "pid": 1,
+       "rss_kb": 273496,
+       "threads": 11,
+       "fds": 14
+      },
+      "child": {
+       "role": "child",
+       "pid": 16,
+       "rss_kb": 291612,
+       "threads": 8,
+       "fds": 9
+      }
+     },
+     "post_drain": {
+      "parent": {
+       "role": "parent",
+       "pid": 1,
+       "rss_kb": 274844,
+       "threads": 11,
+       "fds": 14
+      },
+      "child": {
+       "role": "child",
+       "pid": 16,
+       "rss_kb": 291612,
+       "threads": 8,
+       "fds": 9
+      }
+     },
+     "note": "RSS values are per process and are not summed; container memory is the cgroup figure."
+    }
+   },
+   "P2_r3": {
+    "label": "P2_r3",
+    "profile": "P2",
+    "application": "unmodified committed application",
+    "loadgen_rc": 0,
+    "error": null,
+    "startup": {
+     "health_s": 2.88,
+     "first_explanation_s": 5.62,
+     "includes_container_creation": true
+    },
+    "stop_s": 1.54,
+    "exit_code_and_oom_killed": "0 false",
+    "traceback_in_server_log": false,
+    "graceful_shutdown_logged": false,
+    "client": {
+     "timeout_s": 2.0,
+     "max_connections": 128,
+     "max_backlog": 100,
+     "persistent_connections": true,
+     "percentile_method": "linear interpolation between closest ranks (numpy default)",
+     "generator_cpu_cores_used": 0.552,
+     "event_loop_lag_ms": {
+      "p99": 43.763,
+      "max": 561.414
+     }
+    },
+    "config": {
+     "bucket": 0.0,
+     "burst": 0,
+     "burst_at": 1.0,
+     "explain_callers": 0,
+     "explain_rate": 40.0,
+     "measure": 30.0,
+     "predict_rate": 100.0,
+     "warmup": 10.0
+    },
+    "predict": {
+     "completed": 2642,
+     "successful": 2642,
+     "success_fraction": 1.0,
+     "status_counts": {
+      "200": 2642
+     },
+     "error_code_counts": {},
+     "client_timeouts": 0,
+     "connection_failures": 0,
+     "contract_or_association_violations": 0,
+     "violation_kinds": {},
+     "latency_request_successful": {
+      "n": 2642,
+      "p50_ms": 5.642,
+      "p95_ms": 2060.297,
+      "p99_ms": 4954.63,
+      "max_ms": 7813.862,
+      "mean_ms": 330.975
+     },
+     "latency_request_all_completed": {
+      "n": 2642,
+      "p50_ms": 5.642,
+      "p95_ms": 2060.297,
+      "p99_ms": 4954.63,
+      "max_ms": 7813.862,
+      "mean_ms": 330.975
+     },
+     "latency_scheduled_all_completed": {
+      "n": 2642,
+      "p50_ms": 7.313,
+      "p95_ms": 2256.278,
+      "p99_ms": 5313.579,
+      "max_ms": 8271.494,
+      "mean_ms": 356.59
+     },
+     "latency_scheduled_successful": {
+      "n": 2642,
+      "p50_ms": 7.313,
+      "p95_ms": 2256.278,
+      "p99_ms": 5313.579,
+      "max_ms": 8271.494,
+      "mean_ms": 356.59
+     },
+     "throughput_completed_per_s": 88.067,
+     "throughput_successful_per_s": 88.067,
+     "max_inflight": 143,
+     "open_loop": {
+      "scheduled_rate_per_s": 100.0,
+      "scheduled_in_window": 2642,
+      "missed_arrivals_total": 358,
+      "attempted_in_window": 2642,
+      "scheduling_lag_ms": {
+       "p50": 1.367,
+       "p99": 444.666,
+       "max": 688.15
+      }
+     }
+    },
+    "explain": {
+     "completed": 1176,
+     "successful": 931,
+     "success_fraction": 0.791667,
+     "status_counts": {
+      "200": 931,
+      "503": 244,
+      "504": 1
+     },
+     "error_code_counts": {
+      "explanation_overloaded": 8,
+      "explanation_deadline_exceeded": 1,
+      "explanation_unavailable": 236
+     },
+     "client_timeouts": 0,
+     "connection_failures": 0,
+     "contract_or_association_violations": 0,
+     "violation_kinds": {},
+     "latency_request_successful": {
+      "n": 931,
+      "p50_ms": 25.529,
+      "p95_ms": 855.295,
+      "p99_ms": 3365.631,
+      "max_ms": 7546.721,
+      "mean_ms": 183.136
+     },
+     "latency_request_all_completed": {
+      "n": 1176,
+      "p50_ms": 29.114,
+      "p95_ms": 3599.377,
+      "p99_ms": 5328.619,
+      "max_ms": 7546.721,
+      "mean_ms": 544.491
+     },
+     "latency_scheduled_all_completed": {
+      "n": 1176,
+      "p50_ms": 31.079,
+      "p95_ms": 3676.437,
+      "p99_ms": 5403.143,
+      "max_ms": 7660.803,
+      "mean_ms": 580.582
+     },
+     "latency_scheduled_successful": {
+      "n": 931,
+      "p50_ms": 27.464,
+      "p95_ms": 878.509,
+      "p99_ms": 3446.56,
+      "max_ms": 7660.803,
+      "mean_ms": 190.705
+     },
+     "throughput_completed_per_s": 39.2,
+     "throughput_successful_per_s": 31.033,
+     "max_inflight": 119,
+     "open_loop": {
+      "scheduled_rate_per_s": 40.0,
+      "scheduled_in_window": 1176,
+      "missed_arrivals_total": 24,
+      "attempted_in_window": 1176,
+      "scheduling_lag_ms": {
+       "p50": 1.497,
+       "p99": 438.522,
+       "max": 562.577
+      }
+     }
+    },
+    "resources": {
+     "cgroup_memory_limit_bytes": 1073741824,
+     "memory_current_post_readiness_mib": 386.2,
+     "memory_peak_container_lifetime_mib": 389.6,
+     "memory_peak_fraction_of_limit": 0.3805,
+     "memory_current_post_drain_mib": 388.1,
+     "memory_current_sampled_max_mib": 388.2,
+     "oom_kill_events": 0,
+     "docker_oom_killed": [
+      "false"
+     ],
+     "cpu_throttling": {
+      "nr_throttled": 2,
+      "throttled_ms": 689.5,
+      "nr_periods": 430,
+      "server_cpu_cores_used_during_run": 1.038
+     },
+     "post_readiness": {
+      "parent": {
+       "role": "parent",
+       "pid": 1,
+       "rss_kb": 273188,
+       "threads": 11,
+       "fds": 14
+      },
+      "child": {
+       "role": "child",
+       "pid": 17,
+       "rss_kb": 291852,
+       "threads": 8,
+       "fds": 9
+      }
+     },
+     "post_drain": {
+      "parent": {
+       "role": "parent",
+       "pid": 1,
+       "rss_kb": 274936,
+       "threads": 17,
+       "fds": 14
+      },
+      "child": {
+       "role": "child",
+       "pid": 267,
+       "rss_kb": 292196,
+       "threads": 8,
+       "fds": 9
+      }
+     },
+     "note": "RSS values are per process and are not summed; container memory is the cgroup figure."
+    }
+   },
+   "P0_r3": {
+    "label": "P0_r3",
+    "profile": "P0",
+    "application": "unmodified committed application",
+    "loadgen_rc": 0,
+    "error": null,
+    "startup": {
+     "health_s": 3.01,
+     "first_explanation_s": 5.59,
+     "includes_container_creation": true
+    },
+    "stop_s": 1.33,
+    "exit_code_and_oom_killed": "0 false",
+    "traceback_in_server_log": false,
+    "graceful_shutdown_logged": false,
+    "client": {
+     "timeout_s": 2.0,
+     "max_connections": 128,
+     "max_backlog": 100,
+     "persistent_connections": true,
+     "percentile_method": "linear interpolation between closest ranks (numpy default)",
+     "generator_cpu_cores_used": 0.407,
+     "event_loop_lag_ms": {
+      "p99": 2.911,
+      "max": 33.131
+     }
+    },
+    "config": {
+     "bucket": 0.0,
+     "burst": 0,
+     "burst_at": 1.0,
+     "explain_callers": 0,
+     "explain_rate": 0.0,
+     "measure": 30.0,
+     "predict_rate": 100.0,
+     "warmup": 10.0
+    },
+    "predict": {
+     "completed": 3000,
+     "successful": 3000,
+     "success_fraction": 1.0,
+     "status_counts": {
+      "200": 3000
+     },
+     "error_code_counts": {},
+     "client_timeouts": 0,
+     "connection_failures": 0,
+     "contract_or_association_violations": 0,
+     "violation_kinds": {},
+     "latency_request_successful": {
+      "n": 3000,
+      "p50_ms": 6.764,
+      "p95_ms": 9.953,
+      "p99_ms": 12.098,
+      "max_ms": 14.753,
+      "mean_ms": 6.811
+     },
+     "latency_request_all_completed": {
+      "n": 3000,
+      "p50_ms": 6.764,
+      "p95_ms": 9.953,
+      "p99_ms": 12.098,
+      "max_ms": 14.753,
+      "mean_ms": 6.811
+     },
+     "latency_scheduled_all_completed": {
+      "n": 3000,
+      "p50_ms": 8.234,
+      "p95_ms": 11.663,
+      "p99_ms": 14.039,
+      "max_ms": 19.427,
+      "mean_ms": 8.201
+     },
+     "latency_scheduled_successful": {
+      "n": 3000,
+      "p50_ms": 8.234,
+      "p95_ms": 11.663,
+      "p99_ms": 14.039,
+      "max_ms": 19.427,
+      "mean_ms": 8.201
+     },
+     "throughput_completed_per_s": 100.0,
+     "throughput_successful_per_s": 100.0,
+     "max_inflight": 7,
+     "open_loop": {
+      "scheduled_rate_per_s": 100.0,
+      "scheduled_in_window": 3000,
+      "missed_arrivals_total": 0,
+      "attempted_in_window": 3000,
+      "scheduling_lag_ms": {
+       "p50": 1.543,
+       "p99": 2.018,
+       "max": 8.369
+      }
+     }
+    },
+    "explain": {},
+    "resources": {
+     "cgroup_memory_limit_bytes": 1073741824,
+     "memory_current_post_readiness_mib": 386.2,
+     "memory_peak_container_lifetime_mib": 388.9,
+     "memory_peak_fraction_of_limit": 0.3798,
+     "memory_current_post_drain_mib": 387.4,
+     "memory_current_sampled_max_mib": 387.4,
+     "oom_kill_events": 0,
+     "docker_oom_killed": [
+      "false"
+     ],
+     "cpu_throttling": {
+      "nr_throttled": 0,
+      "throttled_ms": 0.0,
+      "nr_periods": 423,
+      "server_cpu_cores_used_during_run": 0.327
+     },
+     "post_readiness": {
+      "parent": {
+       "role": "parent",
+       "pid": 1,
+       "rss_kb": 273520,
+       "threads": 11,
+       "fds": 14
+      },
+      "child": {
+       "role": "child",
+       "pid": 17,
+       "rss_kb": 291944,
+       "threads": 8,
+       "fds": 9
+      }
+     },
+     "post_drain": {
+      "parent": {
+       "role": "parent",
+       "pid": 1,
+       "rss_kb": 274804,
+       "threads": 12,
+       "fds": 14
+      },
+      "child": {
+       "role": "child",
+       "pid": 17,
+       "rss_kb": 291944,
+       "threads": 8,
+       "fds": 9
+      }
+     },
+     "note": "RSS values are per process and are not summed; container memory is the cgroup figure."
+    }
+   },
+   "P1_r3": {
+    "label": "P1_r3",
+    "profile": "P1",
+    "application": "unmodified committed application",
+    "loadgen_rc": 0,
+    "error": null,
+    "startup": {
+     "health_s": 2.82,
+     "first_explanation_s": 5.37,
+     "includes_container_creation": true
+    },
+    "stop_s": 1.03,
+    "exit_code_and_oom_killed": "0 false",
+    "traceback_in_server_log": false,
+    "graceful_shutdown_logged": false,
+    "client": {
+     "timeout_s": 2.0,
+     "max_connections": 128,
+     "max_backlog": 100,
+     "persistent_connections": true,
+     "percentile_method": "linear interpolation between closest ranks (numpy default)",
+     "generator_cpu_cores_used": 0.339,
+     "event_loop_lag_ms": {
+      "p99": 1.983,
+      "max": 19.632
+     }
+    },
+    "config": {
+     "bucket": 0.0,
+     "burst": 0,
+     "burst_at": 1.0,
+     "explain_callers": 4,
+     "explain_rate": 0.0,
+     "measure": 30.0,
+     "predict_rate": 100.0,
+     "warmup": 10.0
+    },
+    "predict": {
+     "completed": 3000,
+     "successful": 3000,
+     "success_fraction": 1.0,
+     "status_counts": {
+      "200": 3000
+     },
+     "error_code_counts": {},
+     "client_timeouts": 0,
+     "connection_failures": 0,
+     "contract_or_association_violations": 0,
+     "violation_kinds": {},
+     "latency_request_successful": {
+      "n": 3000,
+      "p50_ms": 3.627,
+      "p95_ms": 5.915,
+      "p99_ms": 7.781,
+      "max_ms": 15.077,
+      "mean_ms": 4.015
+     },
+     "latency_request_all_completed": {
+      "n": 3000,
+      "p50_ms": 3.627,
+      "p95_ms": 5.915,
+      "p99_ms": 7.781,
+      "max_ms": 15.077,
+      "mean_ms": 4.015
+     },
+     "latency_scheduled_all_completed": {
+      "n": 3000,
+      "p50_ms": 5.103,
+      "p95_ms": 7.555,
+      "p99_ms": 9.763,
+      "max_ms": 17.068,
+      "mean_ms": 5.198
+     },
+     "latency_scheduled_successful": {
+      "n": 3000,
+      "p50_ms": 5.103,
+      "p95_ms": 7.555,
+      "p99_ms": 9.763,
+      "max_ms": 17.068,
+      "mean_ms": 5.198
+     },
+     "throughput_completed_per_s": 100.0,
+     "throughput_successful_per_s": 100.0,
+     "max_inflight": 2,
+     "open_loop": {
+      "scheduled_rate_per_s": 100.0,
+      "scheduled_in_window": 3000,
+      "missed_arrivals_total": 0,
+      "attempted_in_window": 3000,
+      "scheduling_lag_ms": {
+       "p50": 0.957,
+       "p99": 2.117,
+       "max": 6.736
+      }
+     }
+    },
+    "explain": {
+     "completed": 1777,
+     "successful": 1777,
+     "success_fraction": 1.0,
+     "status_counts": {
+      "200": 1777
+     },
+     "error_code_counts": {},
+     "client_timeouts": 0,
+     "connection_failures": 0,
+     "contract_or_association_violations": 0,
+     "violation_kinds": {},
+     "latency_request_successful": {
+      "n": 1777,
+      "p50_ms": 66.067,
+      "p95_ms": 78.392,
+      "p99_ms": 97.375,
+      "max_ms": 131.055,
+      "mean_ms": 67.49
+     },
+     "latency_request_all_completed": {
+      "n": 1777,
+      "p50_ms": 66.067,
+      "p95_ms": 78.392,
+      "p99_ms": 97.375,
+      "max_ms": 131.055,
+      "mean_ms": 67.49
+     },
+     "latency_scheduled_all_completed": {
+      "n": 0
+     },
+     "latency_scheduled_successful": {
+      "n": 0
+     },
+     "throughput_completed_per_s": 59.233,
+     "throughput_successful_per_s": 59.233,
+     "max_inflight": 4
+    },
+    "resources": {
+     "cgroup_memory_limit_bytes": 1073741824,
+     "memory_current_post_readiness_mib": 386.7,
+     "memory_peak_container_lifetime_mib": 389.2,
+     "memory_peak_fraction_of_limit": 0.3801,
+     "memory_current_post_drain_mib": 387.8,
+     "memory_current_sampled_max_mib": 387.4,
+     "oom_kill_events": 0,
+     "docker_oom_killed": [
+      "false"
+     ],
+     "cpu_throttling": {
+      "nr_throttled": 0,
+      "throttled_ms": 0.0,
+      "nr_periods": 427,
+      "server_cpu_cores_used_during_run": 1.176
+     },
+     "post_readiness": {
+      "parent": {
+       "role": "parent",
+       "pid": 1,
+       "rss_kb": 273448,
+       "threads": 11,
+       "fds": 14
+      },
+      "child": {
+       "role": "child",
+       "pid": 17,
+       "rss_kb": 291780,
+       "threads": 8,
+       "fds": 9
+      }
+     },
+     "post_drain": {
+      "parent": {
+       "role": "parent",
+       "pid": 1,
+       "rss_kb": 274832,
+       "threads": 11,
+       "fds": 14
+      },
+      "child": {
+       "role": "child",
+       "pid": 17,
+       "rss_kb": 292164,
+       "threads": 8,
+       "fds": 9
+      }
+     },
+     "note": "RSS values are per process and are not summed; container memory is the cgroup figure."
+    }
+   },
+   "P3_r1": {
+    "label": "P3_r1",
+    "profile": "P3",
+    "application": "unmodified committed application",
+    "loadgen_rc": 0,
+    "error": null,
+    "startup": {
+     "health_s": 3.08,
+     "first_explanation_s": 5.61,
+     "includes_container_creation": true
+    },
+    "stop_s": 1.2,
+    "exit_code_and_oom_killed": "0 false",
+    "traceback_in_server_log": false,
+    "graceful_shutdown_logged": false,
+    "client": {
+     "timeout_s": 2.0,
+     "max_connections": 128,
+     "max_backlog": 100,
+     "persistent_connections": true,
+     "percentile_method": "linear interpolation between closest ranks (numpy default)",
+     "generator_cpu_cores_used": 0.15,
+     "event_loop_lag_ms": {
+      "p99": 2.834,
+      "max": 21.584
+     }
+    },
+    "config": {
+     "bucket": 0.0,
+     "burst": 0,
+     "burst_at": 1.0,
+     "explain_callers": 4,
+     "explain_rate": 0.0,
+     "measure": 30.0,
+     "predict_rate": 0.0,
+     "warmup": 10.0
+    },
+    "predict": {},
+    "explain": {
+     "completed": 1813,
+     "successful": 1813,
+     "success_fraction": 1.0,
+     "status_counts": {
+      "200": 1813
+     },
+     "error_code_counts": {},
+     "client_timeouts": 0,
+     "connection_failures": 0,
+     "contract_or_association_violations": 0,
+     "violation_kinds": {},
+     "latency_request_successful": {
+      "n": 1813,
+      "p50_ms": 63.521,
+      "p95_ms": 80.173,
+      "p99_ms": 133.105,
+      "max_ms": 227.832,
+      "mean_ms": 66.2
+     },
+     "latency_request_all_completed": {
+      "n": 1813,
+      "p50_ms": 63.521,
+      "p95_ms": 80.173,
+      "p99_ms": 133.105,
+      "max_ms": 227.832,
+      "mean_ms": 66.2
+     },
+     "latency_scheduled_all_completed": {
+      "n": 0
+     },
+     "latency_scheduled_successful": {
+      "n": 0
+     },
+     "throughput_completed_per_s": 60.433,
+     "throughput_successful_per_s": 60.433,
+     "max_inflight": 4
+    },
+    "resources": {
+     "cgroup_memory_limit_bytes": 1073741824,
+     "memory_current_post_readiness_mib": 386.6,
+     "memory_peak_container_lifetime_mib": 389.3,
+     "memory_peak_fraction_of_limit": 0.3802,
+     "memory_current_post_drain_mib": 387.7,
+     "memory_current_sampled_max_mib": 388.2,
+     "oom_kill_events": 0,
+     "docker_oom_killed": [
+      "false"
+     ],
+     "cpu_throttling": {
+      "nr_throttled": 0,
+      "throttled_ms": 0.0,
+      "nr_periods": 425,
+      "server_cpu_cores_used_during_run": 1.032
+     },
+     "post_readiness": {
+      "parent": {
+       "role": "parent",
+       "pid": 1,
+       "rss_kb": 273968,
+       "threads": 11,
+       "fds": 14
+      },
+      "child": {
+       "role": "child",
+       "pid": 17,
+       "rss_kb": 292272,
+       "threads": 8,
+       "fds": 9
+      }
+     },
+     "post_drain": {
+      "parent": {
+       "role": "parent",
+       "pid": 1,
+       "rss_kb": 274380,
+       "threads": 11,
+       "fds": 14
+      },
+      "child": {
+       "role": "child",
+       "pid": 17,
+       "rss_kb": 292696,
+       "threads": 8,
+       "fds": 9
+      }
+     },
+     "note": "RSS values are per process and are not summed; container memory is the cgroup figure."
+    }
+   },
+   "P4_r1": {
+    "label": "P4_r1",
+    "profile": "P4",
+    "application": "bench-instrumented (polled /__bench/diag, 1 Hz)",
+    "loadgen_rc": 0,
+    "error": null,
+    "startup": {
+     "health_s": 3.18,
+     "first_explanation_s": 5.73,
+     "includes_container_creation": true
+    },
+    "stop_s": 1.35,
+    "exit_code_and_oom_killed": "0 false",
+    "traceback_in_server_log": false,
+    "graceful_shutdown_logged": false,
+    "client": {
+     "timeout_s": 2.0,
+     "max_connections": 128,
+     "max_backlog": 100,
+     "persistent_connections": true,
+     "percentile_method": "linear interpolation between closest ranks (numpy default)",
+     "generator_cpu_cores_used": 0.423,
+     "event_loop_lag_ms": {
+      "p99": 4.351,
+      "max": 61.19
+     }
+    },
+    "config": {
+     "bucket": 1.0,
+     "burst": 32,
+     "burst_at": 1.0,
+     "explain_callers": 0,
+     "explain_rate": 0.0,
+     "measure": 10.0,
+     "predict_rate": 100.0,
+     "warmup": 10.0
+    },
+    "predict": {
+     "completed": 1000,
+     "successful": 1000,
+     "success_fraction": 1.0,
+     "status_counts": {
+      "200": 1000
+     },
+     "error_code_counts": {},
+     "client_timeouts": 0,
+     "connection_failures": 0,
+     "contract_or_association_violations": 0,
+     "violation_kinds": {},
+     "latency_request_successful": {
+      "n": 1000,
+      "p50_ms": 6.636,
+      "p95_ms": 9.922,
+      "p99_ms": 37.309,
+      "max_ms": 80.968,
+      "mean_ms": 7.592
+     },
+     "latency_request_all_completed": {
+      "n": 1000,
+      "p50_ms": 6.636,
+      "p95_ms": 9.922,
+      "p99_ms": 37.309,
+      "max_ms": 80.968,
+      "mean_ms": 7.592
+     },
+     "latency_scheduled_all_completed": {
+      "n": 1000,
+      "p50_ms": 8.032,
+      "p95_ms": 11.792,
+      "p99_ms": 51.457,
+      "max_ms": 89.737,
+      "mean_ms": 9.042
+     },
+     "latency_scheduled_successful": {
+      "n": 1000,
+      "p50_ms": 8.032,
+      "p95_ms": 11.792,
+      "p99_ms": 51.457,
+      "max_ms": 89.737,
+      "mean_ms": 9.042
+     },
+     "throughput_completed_per_s": 100.0,
+     "throughput_successful_per_s": 100.0,
+     "max_inflight": 15,
+     "open_loop": {
+      "scheduled_rate_per_s": 100.0,
+      "scheduled_in_window": 1000,
+      "missed_arrivals_total": 0,
+      "attempted_in_window": 1000,
+      "scheduling_lag_ms": {
+       "p50": 1.054,
+       "p99": 4.818,
+       "max": 15.798
+      }
+     }
+    },
+    "explain": {
+     "completed": 32,
+     "successful": 17,
+     "success_fraction": 0.53125,
+     "status_counts": {
+      "200": 17,
+      "503": 15
+     },
+     "error_code_counts": {
+      "explanation_overloaded": 15
+     },
+     "client_timeouts": 0,
+     "connection_failures": 0,
+     "contract_or_association_violations": 0,
+     "violation_kinds": {},
+     "latency_request_successful": {
+      "n": 17,
+      "p50_ms": 203.283,
+      "p95_ms": 313.713,
+      "p99_ms": 324.65,
+      "max_ms": 327.384,
+      "mean_ms": 203.184
+     },
+     "latency_request_all_completed": {
+      "n": 32,
+      "p50_ms": 146.022,
+      "p95_ms": 308.484,
+      "p99_ms": 322.087,
+      "max_ms": 327.384,
+      "mean_ms": 168.565
+     },
+     "latency_scheduled_all_completed": {
+      "n": 32,
+      "p50_ms": 157.697,
+      "p95_ms": 319.266,
+      "p99_ms": 338.508,
+      "max_ms": 343.363,
+      "mean_ms": 180.591
+     },
+     "latency_scheduled_successful": {
+      "n": 17,
+      "p50_ms": 212.447,
+      "p95_ms": 330.835,
+      "p99_ms": 340.857,
+      "max_ms": 343.363,
+      "mean_ms": 213.145
+     },
+     "throughput_completed_per_s": 3.2,
+     "throughput_successful_per_s": 1.7,
+     "max_inflight": 32
+    },
+    "predict_timeline": [
+     {
+      "bucket_start_s": 0.0,
+      "completed": 100,
+      "status_counts": {
+       "200": 100
+      },
+      "request_p95_ms": 9.325
+     },
+     {
+      "bucket_start_s": 1.0,
+      "completed": 100,
+      "status_counts": {
+       "200": 100
+      },
+      "request_p95_ms": 60.097
+     },
+     {
+      "bucket_start_s": 2.0,
+      "completed": 100,
+      "status_counts": {
+       "200": 100
+      },
+      "request_p95_ms": 9.956
+     },
+     {
+      "bucket_start_s": 3.0,
+      "completed": 100,
+      "status_counts": {
+       "200": 100
+      },
+      "request_p95_ms": 9.875
+     },
+     {
+      "bucket_start_s": 4.0,
+      "completed": 100,
+      "status_counts": {
+       "200": 100
+      },
+      "request_p95_ms": 9.603
+     },
+     {
+      "bucket_start_s": 5.0,
+      "completed": 100,
+      "status_counts": {
+       "200": 100
+      },
+      "request_p95_ms": 8.989
+     },
+     {
+      "bucket_start_s": 6.0,
+      "completed": 100,
+      "status_counts": {
+       "200": 100
+      },
+      "request_p95_ms": 9.028
+     },
+     {
+      "bucket_start_s": 7.0,
+      "completed": 100,
+      "status_counts": {
+       "200": 100
+      },
+      "request_p95_ms": 8.933
+     },
+     {
+      "bucket_start_s": 8.0,
+      "completed": 100,
+      "status_counts": {
+       "200": 100
+      },
+      "request_p95_ms": 8.478
+     },
+     {
+      "bucket_start_s": 9.0,
+      "completed": 100,
+      "status_counts": {
+       "200": 100
+      },
+      "request_p95_ms": 8.465
+     }
+    ],
+    "explain_timeline": [
+     {
+      "bucket_start_s": 1.0,
+      "completed": 32,
+      "status_counts": {
+       "200": 17,
+       "503": 15
+      },
+      "request_p95_ms": 308.484
+     }
+    ],
+    "dispatcher_samples": {
+     "n": 21,
+     "errors": 0,
+     "max_active": 0,
+     "max_queued": 0,
+     "max_monitor_tasks": 0,
+     "final": {
+      "state": "ready",
+      "generation": 1,
+      "active": 0,
+      "queued": 0,
+      "high_water": {
+       "active": 1,
+       "queued": 8,
+       "admitted": 9
+      },
+      "restarts_total": 0,
+      "restarts_in_window": 0,
+      "breaker_open": false,
+      "cleanup_failed": false,
+      "counters": {
+       "rejected_unavailable": 45,
+       "admitted": 18,
+       "completed": 18,
+       "resolved": 18,
+       "rejected_overloaded": 15
+      },
+      "invariant_violations": 0
+     }
+    },
+    "resources": {
+     "cgroup_memory_limit_bytes": 1073741824,
+     "memory_current_post_readiness_mib": 386.9,
+     "memory_peak_container_lifetime_mib": 390.8,
+     "memory_peak_fraction_of_limit": 0.3816,
+     "memory_current_post_drain_mib": 388.5,
+     "memory_current_sampled_max_mib": 388.5,
+     "oom_kill_events": 0,
+     "docker_oom_killed": [
+      "false"
+     ],
+     "cpu_throttling": {
+      "nr_throttled": 0,
+      "throttled_ms": 0.0,
+      "nr_periods": 225,
+      "server_cpu_cores_used_during_run": 0.274
+     },
+     "post_readiness": {
+      "parent": {
+       "role": "parent",
+       "pid": 1,
+       "rss_kb": 273960,
+       "threads": 11,
+       "fds": 14
+      },
+      "child": {
+       "role": "child",
+       "pid": 17,
+       "rss_kb": 292012,
+       "threads": 8,
+       "fds": 9
+      }
+     },
+     "post_drain": {
+      "parent": {
+       "role": "parent",
+       "pid": 1,
+       "rss_kb": 275592,
+       "threads": 12,
+       "fds": 14
+      },
+      "child": {
+       "role": "child",
+       "pid": 17,
+       "rss_kb": 292424,
+       "threads": 8,
+       "fds": 9
+      }
+     },
+     "note": "RSS values are per process and are not summed; container memory is the cgroup figure."
+    }
+   },
+   "P4_r2": {
+    "label": "P4_r2",
+    "profile": "P4",
+    "application": "bench-instrumented (polled /__bench/diag, 1 Hz)",
+    "loadgen_rc": 0,
+    "error": null,
+    "startup": {
+     "health_s": 2.78,
+     "first_explanation_s": 5.67,
+     "includes_container_creation": true
+    },
+    "stop_s": 1.37,
+    "exit_code_and_oom_killed": "0 false",
+    "traceback_in_server_log": false,
+    "graceful_shutdown_logged": false,
+    "client": {
+     "timeout_s": 2.0,
+     "max_connections": 128,
+     "max_backlog": 100,
+     "persistent_connections": true,
+     "percentile_method": "linear interpolation between closest ranks (numpy default)",
+     "generator_cpu_cores_used": 0.412,
+     "event_loop_lag_ms": {
+      "p99": 3.384,
+      "max": 24.623
+     }
+    },
+    "config": {
+     "bucket": 1.0,
+     "burst": 32,
+     "burst_at": 1.0,
+     "explain_callers": 0,
+     "explain_rate": 0.0,
+     "measure": 10.0,
+     "predict_rate": 100.0,
+     "warmup": 10.0
+    },
+    "predict": {
+     "completed": 1000,
+     "successful": 1000,
+     "success_fraction": 1.0,
+     "status_counts": {
+      "200": 1000
+     },
+     "error_code_counts": {},
+     "client_timeouts": 0,
+     "connection_failures": 0,
+     "contract_or_association_violations": 0,
+     "violation_kinds": {},
+     "latency_request_successful": {
+      "n": 1000,
+      "p50_ms": 6.736,
+      "p95_ms": 10.818,
+      "p99_ms": 31.155,
+      "max_ms": 63.428,
+      "mean_ms": 7.439
+     },
+     "latency_request_all_completed": {
+      "n": 1000,
+      "p50_ms": 6.736,
+      "p95_ms": 10.818,
+      "p99_ms": 31.155,
+      "max_ms": 63.428,
+      "mean_ms": 7.439
+     },
+     "latency_scheduled_all_completed": {
+      "n": 1000,
+      "p50_ms": 8.119,
+      "p95_ms": 12.341,
+      "p99_ms": 36.885,
+      "max_ms": 71.778,
+      "mean_ms": 8.866
+     },
+     "latency_scheduled_successful": {
+      "n": 1000,
+      "p50_ms": 8.119,
+      "p95_ms": 12.341,
+      "p99_ms": 36.885,
+      "max_ms": 71.778,
+      "mean_ms": 8.866
+     },
+     "throughput_completed_per_s": 100.0,
+     "throughput_successful_per_s": 100.0,
+     "max_inflight": 6,
+     "open_loop": {
+      "scheduled_rate_per_s": 100.0,
+      "scheduled_in_window": 1000,
+      "missed_arrivals_total": 0,
+      "attempted_in_window": 1000,
+      "scheduling_lag_ms": {
+       "p50": 1.55,
+       "p99": 3.981,
+       "max": 10.381
+      }
+     }
+    },
+    "explain": {
+     "completed": 32,
+     "successful": 17,
+     "success_fraction": 0.53125,
+     "status_counts": {
+      "200": 17,
+      "503": 15
+     },
+     "error_code_counts": {
+      "explanation_overloaded": 15
+     },
+     "client_timeouts": 0,
+     "connection_failures": 0,
+     "contract_or_association_violations": 0,
+     "violation_kinds": {},
+     "latency_request_successful": {
+      "n": 17,
+      "p50_ms": 179.655,
+      "p95_ms": 284.631,
+      "p99_ms": 294.685,
+      "max_ms": 297.198,
+      "mean_ms": 181.498
+     },
+     "latency_request_all_completed": {
+      "n": 32,
+      "p50_ms": 115.784,
+      "p95_ms": 279.294,
+      "p99_ms": 292.328,
+      "max_ms": 297.198,
+      "mean_ms": 147.804
+     },
+     "latency_scheduled_all_completed": {
+      "n": 32,
+      "p50_ms": 131.989,
+      "p95_ms": 289.633,
+      "p99_ms": 309.624,
+      "max_ms": 314.363,
+      "mean_ms": 159.428
+     },
+     "latency_scheduled_successful": {
+      "n": 17,
+      "p50_ms": 187.68,
+      "p95_ms": 302.134,
+      "p99_ms": 311.917,
+      "max_ms": 314.363,
+      "mean_ms": 190.24
+     },
+     "throughput_completed_per_s": 3.2,
+     "throughput_successful_per_s": 1.7,
+     "max_inflight": 32
+    },
+    "predict_timeline": [
+     {
+      "bucket_start_s": 0.0,
+      "completed": 100,
+      "status_counts": {
+       "200": 100
+      },
+      "request_p95_ms": 10.142
+     },
+     {
+      "bucket_start_s": 1.0,
+      "completed": 100,
+      "status_counts": {
+       "200": 100
+      },
+      "request_p95_ms": 54.296
+     },
+     {
+      "bucket_start_s": 2.0,
+      "completed": 100,
+      "status_counts": {
+       "200": 100
+      },
+      "request_p95_ms": 9.885
+     },
+     {
+      "bucket_start_s": 3.0,
+      "completed": 100,
+      "status_counts": {
+       "200": 100
+      },
+      "request_p95_ms": 10.833
+     },
+     {
+      "bucket_start_s": 4.0,
+      "completed": 100,
+      "status_counts": {
+       "200": 100
+      },
+      "request_p95_ms": 9.296
+     },
+     {
+      "bucket_start_s": 5.0,
+      "completed": 100,
+      "status_counts": {
+       "200": 100
+      },
+      "request_p95_ms": 11.485
+     },
+     {
+      "bucket_start_s": 6.0,
+      "completed": 100,
+      "status_counts": {
+       "200": 100
+      },
+      "request_p95_ms": 9.04
+     },
+     {
+      "bucket_start_s": 7.0,
+      "completed": 100,
+      "status_counts": {
+       "200": 100
+      },
+      "request_p95_ms": 9.125
+     },
+     {
+      "bucket_start_s": 8.0,
+      "completed": 100,
+      "status_counts": {
+       "200": 100
+      },
+      "request_p95_ms": 9.356
+     },
+     {
+      "bucket_start_s": 9.0,
+      "completed": 100,
+      "status_counts": {
+       "200": 100
+      },
+      "request_p95_ms": 8.632
+     }
+    ],
+    "explain_timeline": [
+     {
+      "bucket_start_s": 1.0,
+      "completed": 32,
+      "status_counts": {
+       "200": 17,
+       "503": 15
+      },
+      "request_p95_ms": 279.294
+     }
+    ],
+    "dispatcher_samples": {
+     "n": 21,
+     "errors": 0,
+     "max_active": 0,
+     "max_queued": 0,
+     "max_monitor_tasks": 0,
+     "final": {
+      "state": "ready",
+      "generation": 1,
+      "active": 0,
+      "queued": 0,
+      "high_water": {
+       "active": 1,
+       "queued": 8,
+       "admitted": 9
+      },
+      "restarts_total": 0,
+      "restarts_in_window": 0,
+      "breaker_open": false,
+      "cleanup_failed": false,
+      "counters": {
+       "rejected_unavailable": 51,
+       "admitted": 18,
+       "completed": 18,
+       "resolved": 18,
+       "rejected_overloaded": 15
+      },
+      "invariant_violations": 0
+     }
+    },
+    "resources": {
+     "cgroup_memory_limit_bytes": 1073741824,
+     "memory_current_post_readiness_mib": 386.5,
+     "memory_peak_container_lifetime_mib": 389.3,
+     "memory_peak_fraction_of_limit": 0.3802,
+     "memory_current_post_drain_mib": 388.0,
+     "memory_current_sampled_max_mib": 387.8,
+     "oom_kill_events": 0,
+     "docker_oom_killed": [
+      "false"
+     ],
+     "cpu_throttling": {
+      "nr_throttled": 0,
+      "throttled_ms": 0.0,
+      "nr_periods": 226,
+      "server_cpu_cores_used_during_run": 0.281
+     },
+     "post_readiness": {
+      "parent": {
+       "role": "parent",
+       "pid": 1,
+       "rss_kb": 273688,
+       "threads": 11,
+       "fds": 14
+      },
+      "child": {
+       "role": "child",
+       "pid": 17,
+       "rss_kb": 292176,
+       "threads": 8,
+       "fds": 9
+      }
+     },
+     "post_drain": {
+      "parent": {
+       "role": "parent",
+       "pid": 1,
+       "rss_kb": 275524,
+       "threads": 13,
+       "fds": 14
+      },
+      "child": {
+       "role": "child",
+       "pid": 17,
+       "rss_kb": 292324,
+       "threads": 8,
+       "fds": 9
+      }
+     },
+     "note": "RSS values are per process and are not summed; container memory is the cgroup figure."
+    }
+   },
+   "P4_r3": {
+    "label": "P4_r3",
+    "profile": "P4",
+    "application": "bench-instrumented (polled /__bench/diag, 1 Hz)",
+    "loadgen_rc": 0,
+    "error": null,
+    "startup": {
+     "health_s": 2.73,
+     "first_explanation_s": 5.3,
+     "includes_container_creation": true
+    },
+    "stop_s": 1.4,
+    "exit_code_and_oom_killed": "0 false",
+    "traceback_in_server_log": false,
+    "graceful_shutdown_logged": false,
+    "client": {
+     "timeout_s": 2.0,
+     "max_connections": 128,
+     "max_backlog": 100,
+     "persistent_connections": true,
+     "percentile_method": "linear interpolation between closest ranks (numpy default)",
+     "generator_cpu_cores_used": 0.414,
+     "event_loop_lag_ms": {
+      "p99": 3.248,
+      "max": 20.556
+     }
+    },
+    "config": {
+     "bucket": 1.0,
+     "burst": 32,
+     "burst_at": 1.0,
+     "explain_callers": 0,
+     "explain_rate": 0.0,
+     "measure": 10.0,
+     "predict_rate": 100.0,
+     "warmup": 10.0
+    },
+    "predict": {
+     "completed": 1000,
+     "successful": 1000,
+     "success_fraction": 1.0,
+     "status_counts": {
+      "200": 1000
+     },
+     "error_code_counts": {},
+     "client_timeouts": 0,
+     "connection_failures": 0,
+     "contract_or_association_violations": 0,
+     "violation_kinds": {},
+     "latency_request_successful": {
+      "n": 1000,
+      "p50_ms": 6.51,
+      "p95_ms": 10.076,
+      "p99_ms": 32.978,
+      "max_ms": 72.795,
+      "mean_ms": 7.316
+     },
+     "latency_request_all_completed": {
+      "n": 1000,
+      "p50_ms": 6.51,
+      "p95_ms": 10.076,
+      "p99_ms": 32.978,
+      "max_ms": 72.795,
+      "mean_ms": 7.316
+     },
+     "latency_scheduled_all_completed": {
+      "n": 1000,
+      "p50_ms": 7.755,
+      "p95_ms": 12.045,
+      "p99_ms": 39.45,
+      "max_ms": 81.039,
+      "mean_ms": 8.722
+     },
+     "latency_scheduled_successful": {
+      "n": 1000,
+      "p50_ms": 7.755,
+      "p95_ms": 12.045,
+      "p99_ms": 39.45,
+      "max_ms": 81.039,
+      "mean_ms": 8.722
+     },
+     "throughput_completed_per_s": 100.0,
+     "throughput_successful_per_s": 100.0,
+     "max_inflight": 7,
+     "open_loop": {
+      "scheduled_rate_per_s": 100.0,
+      "scheduled_in_window": 1000,
+      "missed_arrivals_total": 0,
+      "attempted_in_window": 1000,
+      "scheduling_lag_ms": {
+       "p50": 1.133,
+       "p99": 4.778,
+       "max": 13.635
+      }
+     }
+    },
+    "explain": {
+     "completed": 32,
+     "successful": 17,
+     "success_fraction": 0.53125,
+     "status_counts": {
+      "200": 17,
+      "503": 15
+     },
+     "error_code_counts": {
+      "explanation_overloaded": 15
+     },
+     "client_timeouts": 0,
+     "connection_failures": 0,
+     "contract_or_association_violations": 0,
+     "violation_kinds": {},
+     "latency_request_successful": {
+      "n": 17,
+      "p50_ms": 180.478,
+      "p95_ms": 287.864,
+      "p99_ms": 295.743,
+      "max_ms": 297.712,
+      "mean_ms": 180.605
+     },
+     "latency_request_all_completed": {
+      "n": 32,
+      "p50_ms": 120.261,
+      "p95_ms": 275.317,
+      "p99_ms": 293.896,
+      "max_ms": 297.712,
+      "mean_ms": 146.651
+     },
+     "latency_scheduled_all_completed": {
+      "n": 32,
+      "p50_ms": 139.326,
+      "p95_ms": 295.217,
+      "p99_ms": 314.253,
+      "max_ms": 318.503,
+      "mean_ms": 160.861
+     },
+     "latency_scheduled_successful": {
+      "n": 17,
+      "p50_ms": 190.535,
+      "p95_ms": 307.537,
+      "p99_ms": 316.31,
+      "max_ms": 318.503,
+      "mean_ms": 192.424
+     },
+     "throughput_completed_per_s": 3.2,
+     "throughput_successful_per_s": 1.7,
+     "max_inflight": 32
+    },
+    "predict_timeline": [
+     {
+      "bucket_start_s": 0.0,
+      "completed": 100,
+      "status_counts": {
+       "200": 100
+      },
+      "request_p95_ms": 9.033
+     },
+     {
+      "bucket_start_s": 1.0,
+      "completed": 100,
+      "status_counts": {
+       "200": 100
+      },
+      "request_p95_ms": 52.164
+     },
+     {
+      "bucket_start_s": 2.0,
+      "completed": 100,
+      "status_counts": {
+       "200": 100
+      },
+      "request_p95_ms": 9.377
+     },
+     {
+      "bucket_start_s": 3.0,
+      "completed": 100,
+      "status_counts": {
+       "200": 100
+      },
+      "request_p95_ms": 9.311
+     },
+     {
+      "bucket_start_s": 4.0,
+      "completed": 100,
+      "status_counts": {
+       "200": 100
+      },
+      "request_p95_ms": 10.29
+     },
+     {
+      "bucket_start_s": 5.0,
+      "completed": 100,
+      "status_counts": {
+       "200": 100
+      },
+      "request_p95_ms": 10.354
+     },
+     {
+      "bucket_start_s": 6.0,
+      "completed": 100,
+      "status_counts": {
+       "200": 100
+      },
+      "request_p95_ms": 9.057
+     },
+     {
+      "bucket_start_s": 7.0,
+      "completed": 100,
+      "status_counts": {
+       "200": 100
+      },
+      "request_p95_ms": 9.329
+     },
+     {
+      "bucket_start_s": 8.0,
+      "completed": 100,
+      "status_counts": {
+       "200": 100
+      },
+      "request_p95_ms": 9.975
+     },
+     {
+      "bucket_start_s": 9.0,
+      "completed": 100,
+      "status_counts": {
+       "200": 100
+      },
+      "request_p95_ms": 9.711
+     }
+    ],
+    "explain_timeline": [
+     {
+      "bucket_start_s": 1.0,
+      "completed": 32,
+      "status_counts": {
+       "200": 17,
+       "503": 15
+      },
+      "request_p95_ms": 275.317
+     }
+    ],
+    "dispatcher_samples": {
+     "n": 21,
+     "errors": 0,
+     "max_active": 0,
+     "max_queued": 0,
+     "max_monitor_tasks": 0,
+     "final": {
+      "state": "ready",
+      "generation": 1,
+      "active": 0,
+      "queued": 0,
+      "high_water": {
+       "active": 1,
+       "queued": 8,
+       "admitted": 9
+      },
+      "restarts_total": 0,
+      "restarts_in_window": 0,
+      "breaker_open": false,
+      "cleanup_failed": false,
+      "counters": {
+       "rejected_unavailable": 46,
+       "admitted": 18,
+       "completed": 18,
+       "resolved": 18,
+       "rejected_overloaded": 15
+      },
+      "invariant_violations": 0
+     }
+    },
+    "resources": {
+     "cgroup_memory_limit_bytes": 1073741824,
+     "memory_current_post_readiness_mib": 386.7,
+     "memory_peak_container_lifetime_mib": 389.2,
+     "memory_peak_fraction_of_limit": 0.3801,
+     "memory_current_post_drain_mib": 387.3,
+     "memory_current_sampled_max_mib": 387.6,
+     "oom_kill_events": 0,
+     "docker_oom_killed": [
+      "false"
+     ],
+     "cpu_throttling": {
+      "nr_throttled": 0,
+      "throttled_ms": 0.0,
+      "nr_periods": 224,
+      "server_cpu_cores_used_during_run": 0.28
+     },
+     "post_readiness": {
+      "parent": {
+       "role": "parent",
+       "pid": 1,
+       "rss_kb": 273820,
+       "threads": 11,
+       "fds": 14
+      },
+      "child": {
+       "role": "child",
+       "pid": 17,
+       "rss_kb": 291828,
+       "threads": 8,
+       "fds": 9
+      }
+     },
+     "post_drain": {
+      "parent": {
+       "role": "parent",
+       "pid": 1,
+       "rss_kb": 275076,
+       "threads": 12,
+       "fds": 14
+      },
+      "child": {
+       "role": "child",
+       "pid": 17,
+       "rss_kb": 291936,
+       "threads": 8,
+       "fds": 9
+      }
+     },
+     "note": "RSS values are per process and are not summed; container memory is the cgroup figure."
+    }
+   },
+   "P5_r1": {
+    "label": "P5_r1",
+    "profile": "P5",
+    "application": "bench-instrumented (polled /__bench/diag, 1 Hz)",
+    "loadgen_rc": 0,
+    "error": null,
+    "startup": {
+     "health_s": 3.02,
+     "first_explanation_s": 5.82,
+     "includes_container_creation": true
+    },
+    "stop_s": 1.26,
+    "exit_code_and_oom_killed": "0 false",
+    "traceback_in_server_log": false,
+    "graceful_shutdown_logged": false,
+    "client": {
+     "timeout_s": 2.0,
+     "max_connections": 128,
+     "max_backlog": 100,
+     "persistent_connections": true,
+     "percentile_method": "linear interpolation between closest ranks (numpy default)",
+     "generator_cpu_cores_used": 0.379,
+     "event_loop_lag_ms": {
+      "p99": 2.13,
+      "max": 88.041
+     }
+    },
+    "config": {
+     "bucket": 30.0,
+     "burst": 0,
+     "burst_at": 1.0,
+     "explain_callers": 4,
+     "explain_rate": 0.0,
+     "measure": 300.0,
+     "predict_rate": 100.0,
+     "warmup": 10.0
+    },
+    "predict": {
+     "completed": 30000,
+     "successful": 30000,
+     "success_fraction": 1.0,
+     "status_counts": {
+      "200": 30000
+     },
+     "error_code_counts": {},
+     "client_timeouts": 0,
+     "connection_failures": 0,
+     "contract_or_association_violations": 0,
+     "violation_kinds": {},
+     "latency_request_successful": {
+      "n": 30000,
+      "p50_ms": 4.095,
+      "p95_ms": 6.79,
+      "p99_ms": 8.943,
+      "max_ms": 72.367,
+      "mean_ms": 4.515
+     },
+     "latency_request_all_completed": {
+      "n": 30000,
+      "p50_ms": 4.095,
+      "p95_ms": 6.79,
+      "p99_ms": 8.943,
+      "max_ms": 72.367,
+      "mean_ms": 4.515
+     },
+     "latency_scheduled_all_completed": {
+      "n": 30000,
+      "p50_ms": 5.38,
+      "p95_ms": 8.541,
+      "p99_ms": 10.762,
+      "max_ms": 88.187,
+      "mean_ms": 5.721
+     },
+     "latency_scheduled_successful": {
+      "n": 30000,
+      "p50_ms": 5.38,
+      "p95_ms": 8.541,
+      "p99_ms": 10.762,
+      "max_ms": 88.187,
+      "mean_ms": 5.721
+     },
+     "throughput_completed_per_s": 100.0,
+     "throughput_successful_per_s": 100.0,
+     "max_inflight": 26,
+     "open_loop": {
+      "scheduled_rate_per_s": 100.0,
+      "scheduled_in_window": 30000,
+      "missed_arrivals_total": 0,
+      "attempted_in_window": 30000,
+      "scheduling_lag_ms": {
+       "p50": 0.827,
+       "p99": 2.251,
+       "max": 52.936
+      }
+     }
+    },
+    "explain": {
+     "completed": 17080,
+     "successful": 17080,
+     "success_fraction": 1.0,
+     "status_counts": {
+      "200": 17080
+     },
+     "error_code_counts": {},
+     "client_timeouts": 0,
+     "connection_failures": 0,
+     "contract_or_association_violations": 0,
+     "violation_kinds": {},
+     "latency_request_successful": {
+      "n": 17080,
+      "p50_ms": 69.214,
+      "p95_ms": 82.004,
+      "p99_ms": 95.271,
+      "max_ms": 178.347,
+      "mean_ms": 70.239
+     },
+     "latency_request_all_completed": {
+      "n": 17080,
+      "p50_ms": 69.214,
+      "p95_ms": 82.004,
+      "p99_ms": 95.271,
+      "max_ms": 178.347,
+      "mean_ms": 70.239
+     },
+     "latency_scheduled_all_completed": {
+      "n": 0
+     },
+     "latency_scheduled_successful": {
+      "n": 0
+     },
+     "throughput_completed_per_s": 56.933,
+     "throughput_successful_per_s": 56.933,
+     "max_inflight": 4
+    },
+    "predict_timeline": [
+     {
+      "bucket_start_s": 0.0,
+      "completed": 3000,
+      "status_counts": {
+       "200": 3000
+      },
+      "request_p95_ms": 8.024
+     },
+     {
+      "bucket_start_s": 30.0,
+      "completed": 3000,
+      "status_counts": {
+       "200": 3000
+      },
+      "request_p95_ms": 6.562
+     },
+     {
+      "bucket_start_s": 60.0,
+      "completed": 3000,
+      "status_counts": {
+       "200": 3000
+      },
+      "request_p95_ms": 6.182
+     },
+     {
+      "bucket_start_s": 90.0,
+      "completed": 3000,
+      "status_counts": {
+       "200": 3000
+      },
+      "request_p95_ms": 6.415
+     },
+     {
+      "bucket_start_s": 120.0,
+      "completed": 3000,
+      "status_counts": {
+       "200": 3000
+      },
+      "request_p95_ms": 6.573
+     },
+     {
+      "bucket_start_s": 150.0,
+      "completed": 3000,
+      "status_counts": {
+       "200": 3000
+      },
+      "request_p95_ms": 6.418
+     },
+     {
+      "bucket_start_s": 180.0,
+      "completed": 3000,
+      "status_counts": {
+       "200": 3000
+      },
+      "request_p95_ms": 6.749
+     },
+     {
+      "bucket_start_s": 210.0,
+      "completed": 3000,
+      "status_counts": {
+       "200": 3000
+      },
+      "request_p95_ms": 6.788
+     },
+     {
+      "bucket_start_s": 240.0,
+      "completed": 3000,
+      "status_counts": {
+       "200": 3000
+      },
+      "request_p95_ms": 6.63
+     },
+     {
+      "bucket_start_s": 270.0,
+      "completed": 3000,
+      "status_counts": {
+       "200": 3000
+      },
+      "request_p95_ms": 6.923
+     }
+    ],
+    "explain_timeline": [
+     {
+      "bucket_start_s": 0.0,
+      "completed": 1563,
+      "status_counts": {
+       "200": 1563
+      },
+      "request_p95_ms": 91.417
+     },
+     {
+      "bucket_start_s": 30.0,
+      "completed": 1767,
+      "status_counts": {
+       "200": 1767
+      },
+      "request_p95_ms": 78.534
+     },
+     {
+      "bucket_start_s": 60.0,
+      "completed": 1794,
+      "status_counts": {
+       "200": 1794
+      },
+      "request_p95_ms": 75.3
+     },
+     {
+      "bucket_start_s": 90.0,
+      "completed": 1716,
+      "status_counts": {
+       "200": 1716
+      },
+      "request_p95_ms": 80.736
+     },
+     {
+      "bucket_start_s": 120.0,
+      "completed": 1741,
+      "status_counts": {
+       "200": 1741
+      },
+      "request_p95_ms": 78.394
+     },
+     {
+      "bucket_start_s": 150.0,
+      "completed": 1721,
+      "status_counts": {
+       "200": 1721
+      },
+      "request_p95_ms": 79.461
+     },
+     {
+      "bucket_start_s": 180.0,
+      "completed": 1710,
+      "status_counts": {
+       "200": 1710
+      },
+      "request_p95_ms": 80.645
+     },
+     {
+      "bucket_start_s": 210.0,
+      "completed": 1693,
+      "status_counts": {
+       "200": 1693
+      },
+      "request_p95_ms": 82.602
+     },
+     {
+      "bucket_start_s": 240.0,
+      "completed": 1692,
+      "status_counts": {
+       "200": 1692
+      },
+      "request_p95_ms": 80.689
+     },
+     {
+      "bucket_start_s": 270.0,
+      "completed": 1683,
+      "status_counts": {
+       "200": 1683
+      },
+      "request_p95_ms": 83.955
+     }
+    ],
+    "dispatcher_samples": {
+     "n": 310,
+     "errors": 0,
+     "max_active": 1,
+     "max_queued": 3,
+     "max_monitor_tasks": 4,
+     "final": {
+      "state": "ready",
+      "generation": 1,
+      "active": 1,
+      "queued": 2,
+      "high_water": {
+       "active": 1,
+       "queued": 3,
+       "admitted": 4
+      },
+      "restarts_total": 0,
+      "restarts_in_window": 0,
+      "breaker_open": false,
+      "cleanup_failed": false,
+      "counters": {
+       "rejected_unavailable": 50,
+       "admitted": 17604,
+       "completed": 17601,
+       "resolved": 17601
+      },
+      "invariant_violations": 0
+     }
+    },
+    "resources": {
+     "cgroup_memory_limit_bytes": 1073741824,
+     "memory_current_post_readiness_mib": 386.4,
+     "memory_peak_container_lifetime_mib": 391.9,
+     "memory_peak_fraction_of_limit": 0.3827,
+     "memory_current_post_drain_mib": 389.5,
+     "memory_current_sampled_max_mib": 390.5,
+     "oom_kill_events": 0,
+     "docker_oom_killed": [
+      "false"
+     ],
+     "cpu_throttling": {
+      "nr_throttled": 0,
+      "throttled_ms": 0.0,
+      "nr_periods": 3125,
+      "server_cpu_cores_used_during_run": 1.293
+     },
+     "post_readiness": {
+      "parent": {
+       "role": "parent",
+       "pid": 1,
+       "rss_kb": 273632,
+       "threads": 11,
+       "fds": 14
+      },
+      "child": {
+       "role": "child",
+       "pid": 17,
+       "rss_kb": 292168,
+       "threads": 8,
+       "fds": 9
+      }
+     },
+     "post_drain": {
+      "parent": {
+       "role": "parent",
+       "pid": 1,
+       "rss_kb": 276372,
+       "threads": 11,
+       "fds": 14
+      },
+      "child": {
+       "role": "child",
+       "pid": 17,
+       "rss_kb": 293128,
+       "threads": 8,
+       "fds": 9
+      }
+     },
+     "note": "RSS values are per process and are not summed; container memory is the cgroup figure."
+    }
+   }
+  },
+  "prediction_degradation": {
+   "P1_r1": {
+    "baseline": "P0_r1",
+    "baseline_p95_ms": 7.984,
+    "mixed_p95_ms": 5.672,
+    "increase_ms": -2.312,
+    "allowed_ms": 5.0,
+    "scheduled_arrival_p95_baseline_ms": 9.952,
+    "scheduled_arrival_p95_mixed_ms": 7.256
+   },
+   "P2_r1": {
+    "baseline": "P0_r1",
+    "baseline_p95_ms": 7.984,
+    "mixed_p95_ms": 6.533,
+    "increase_ms": -1.451,
+    "allowed_ms": 5.0,
+    "scheduled_arrival_p95_baseline_ms": 9.952,
+    "scheduled_arrival_p95_mixed_ms": 9.08
+   },
+   "P1_r2": {
+    "baseline": "P0_r2",
+    "baseline_p95_ms": 10.066,
+    "mixed_p95_ms": 6.566,
+    "increase_ms": -3.5,
+    "allowed_ms": 5.0,
+    "scheduled_arrival_p95_baseline_ms": 11.711,
+    "scheduled_arrival_p95_mixed_ms": 8.296
+   },
+   "P2_r2": {
+    "baseline": "P0_r2",
+    "baseline_p95_ms": 10.066,
+    "mixed_p95_ms": 6.571,
+    "increase_ms": -3.495,
+    "allowed_ms": 5.0,
+    "scheduled_arrival_p95_baseline_ms": 11.711,
+    "scheduled_arrival_p95_mixed_ms": 9.242
+   },
+   "P2_r3": {
+    "baseline": "P0_r3",
+    "baseline_p95_ms": 9.953,
+    "mixed_p95_ms": 2060.297,
+    "increase_ms": 2050.344,
+    "allowed_ms": 5.0,
+    "scheduled_arrival_p95_baseline_ms": 11.663,
+    "scheduled_arrival_p95_mixed_ms": 2256.278
+   },
+   "P1_r3": {
+    "baseline": "P0_r3",
+    "baseline_p95_ms": 9.953,
+    "mixed_p95_ms": 5.915,
+    "increase_ms": -4.038,
+    "allowed_ms": 5.0,
+    "scheduled_arrival_p95_baseline_ms": 11.663,
+    "scheduled_arrival_p95_mixed_ms": 7.555
+   },
+   "P4_r1": {
+    "baseline": "median of P0_r1..r3 (unmodified application)",
+    "baseline_p95_ms": 9.953,
+    "mixed_p95_ms": 9.922,
+    "increase_ms": -0.031,
+    "allowed_ms": 5.0
+   },
+   "P4_r2": {
+    "baseline": "median of P0_r1..r3 (unmodified application)",
+    "baseline_p95_ms": 9.953,
+    "mixed_p95_ms": 10.818,
+    "increase_ms": 0.865,
+    "allowed_ms": 5.0
+   },
+   "P4_r3": {
+    "baseline": "median of P0_r1..r3 (unmodified application)",
+    "baseline_p95_ms": 9.953,
+    "mixed_p95_ms": 10.076,
+    "increase_ms": 0.123,
+    "allowed_ms": 5.0
+   },
+   "P5_r1": {
+    "baseline": "median of P0_r1..r3 (unmodified application)",
+    "baseline_p95_ms": 9.953,
+    "mixed_p95_ms": 6.79,
+    "increase_ms": -3.163,
+    "allowed_ms": 5.0
+   }
+  },
+  "acceptance_targets": "selected engineering targets (not previously established SLOs); see each gate",
+  "gates": [
+   {
+    "gate": "P0_r1: prediction 100% success, zero contract/association violations, no timeouts",
+    "result": "PASS",
+    "target": "100%",
+    "measured": 1.0,
+    "detail": "responses validated against expected probability/decision for the exact input"
+   },
+   {
+    "gate": "P0_r1: offered prediction workload valid (no missed arrivals, scheduling-lag p99 <= 5 ms)",
+    "result": "PASS",
+    "target": "0 missed, p99 lag <= 5 ms",
+    "measured": {
+     "p50": 1.607,
+     "p99": 2.37,
+     "max": 19.27
+    },
+    "detail": "generator-validity check (a failure would invalidate the comparison, not the server)"
+   },
+   {
+    "gate": "P1_r1: prediction 100% success, zero contract/association violations, no timeouts",
+    "result": "PASS",
+    "target": "100%",
+    "measured": 1.0,
+    "detail": "responses validated against expected probability/decision for the exact input"
+   },
+   {
+    "gate": "P1_r1: offered prediction workload valid (no missed arrivals, scheduling-lag p99 <= 5 ms)",
+    "result": "PASS",
+    "target": "0 missed, p99 lag <= 5 ms",
+    "measured": {
+     "p50": 1.436,
+     "p99": 2.082,
+     "max": 9.79
+    },
+    "detail": "generator-validity check (a failure would invalidate the comparison, not the server)"
+   },
+   {
+    "gate": "P2_r1: prediction 100% success, zero contract/association violations, no timeouts",
+    "result": "PASS",
+    "target": "100%",
+    "measured": 1.0,
+    "detail": "responses validated against expected probability/decision for the exact input"
+   },
+   {
+    "gate": "P2_r1: offered prediction workload valid (no missed arrivals, scheduling-lag p99 <= 5 ms)",
+    "result": "PASS",
+    "target": "0 missed, p99 lag <= 5 ms",
+    "measured": {
+     "p50": 1.223,
+     "p99": 2.808,
+     "max": 3.179
+    },
+    "detail": "generator-validity check (a failure would invalidate the comparison, not the server)"
+   },
+   {
+    "gate": "P1_r2: prediction 100% success, zero contract/association violations, no timeouts",
+    "result": "PASS",
+    "target": "100%",
+    "measured": 1.0,
+    "detail": "responses validated against expected probability/decision for the exact input"
+   },
+   {
+    "gate": "P1_r2: offered prediction workload valid (no missed arrivals, scheduling-lag p99 <= 5 ms)",
+    "result": "PASS",
+    "target": "0 missed, p99 lag <= 5 ms",
+    "measured": {
+     "p50": 1.456,
+     "p99": 2.287,
+     "max": 33.563
+    },
+    "detail": "generator-validity check (a failure would invalidate the comparison, not the server)"
+   },
+   {
+    "gate": "P2_r2: prediction 100% success, zero contract/association violations, no timeouts",
+    "result": "PASS",
+    "target": "100%",
+    "measured": 1.0,
+    "detail": "responses validated against expected probability/decision for the exact input"
+   },
+   {
+    "gate": "P2_r2: offered prediction workload valid (no missed arrivals, scheduling-lag p99 <= 5 ms)",
+    "result": "PASS",
+    "target": "0 missed, p99 lag <= 5 ms",
+    "measured": {
+     "p50": 1.562,
+     "p99": 2.369,
+     "max": 6.251
+    },
+    "detail": "generator-validity check (a failure would invalidate the comparison, not the server)"
+   },
+   {
+    "gate": "P0_r2: prediction 100% success, zero contract/association violations, no timeouts",
+    "result": "PASS",
+    "target": "100%",
+    "measured": 1.0,
+    "detail": "responses validated against expected probability/decision for the exact input"
+   },
+   {
+    "gate": "P0_r2: offered prediction workload valid (no missed arrivals, scheduling-lag p99 <= 5 ms)",
+    "result": "PASS",
+    "target": "0 missed, p99 lag <= 5 ms",
+    "measured": {
+     "p50": 1.261,
+     "p99": 2.349,
+     "max": 5.768
+    },
+    "detail": "generator-validity check (a failure would invalidate the comparison, not the server)"
+   },
+   {
+    "gate": "P2_r3: prediction 100% success, zero contract/association violations, no timeouts",
+    "result": "PASS",
+    "target": "100%",
+    "measured": 1.0,
+    "detail": "responses validated against expected probability/decision for the exact input"
+   },
+   {
+    "gate": "P2_r3: offered prediction workload valid (no missed arrivals, scheduling-lag p99 <= 5 ms)",
+    "result": "FAIL",
+    "target": "0 missed, p99 lag <= 5 ms",
+    "measured": {
+     "p50": 1.367,
+     "p99": 444.666,
+     "max": 688.15
+    },
+    "detail": "generator-validity check (a failure would invalidate the comparison, not the server)"
+   },
+   {
+    "gate": "P0_r3: prediction 100% success, zero contract/association violations, no timeouts",
+    "result": "PASS",
+    "target": "100%",
+    "measured": 1.0,
+    "detail": "responses validated against expected probability/decision for the exact input"
+   },
+   {
+    "gate": "P0_r3: offered prediction workload valid (no missed arrivals, scheduling-lag p99 <= 5 ms)",
+    "result": "PASS",
+    "target": "0 missed, p99 lag <= 5 ms",
+    "measured": {
+     "p50": 1.543,
+     "p99": 2.018,
+     "max": 8.369
+    },
+    "detail": "generator-validity check (a failure would invalidate the comparison, not the server)"
+   },
+   {
+    "gate": "P1_r3: prediction 100% success, zero contract/association violations, no timeouts",
+    "result": "PASS",
+    "target": "100%",
+    "measured": 1.0,
+    "detail": "responses validated against expected probability/decision for the exact input"
+   },
+   {
+    "gate": "P1_r3: offered prediction workload valid (no missed arrivals, scheduling-lag p99 <= 5 ms)",
+    "result": "PASS",
+    "target": "0 missed, p99 lag <= 5 ms",
+    "measured": {
+     "p50": 0.957,
+     "p99": 2.117,
+     "max": 6.736
+    },
+    "detail": "generator-validity check (a failure would invalidate the comparison, not the server)"
+   },
+   {
+    "gate": "P4_r1: prediction 100% success, zero contract/association violations, no timeouts",
+    "result": "PASS",
+    "target": "100%",
+    "measured": 1.0,
+    "detail": "responses validated against expected probability/decision for the exact input"
+   },
+   {
+    "gate": "P4_r1: offered prediction workload valid (no missed arrivals, scheduling-lag p99 <= 5 ms)",
+    "result": "PASS",
+    "target": "0 missed, p99 lag <= 5 ms",
+    "measured": {
+     "p50": 1.054,
+     "p99": 4.818,
+     "max": 15.798
+    },
+    "detail": "generator-validity check (a failure would invalidate the comparison, not the server)"
+   },
+   {
+    "gate": "P4_r2: prediction 100% success, zero contract/association violations, no timeouts",
+    "result": "PASS",
+    "target": "100%",
+    "measured": 1.0,
+    "detail": "responses validated against expected probability/decision for the exact input"
+   },
+   {
+    "gate": "P4_r2: offered prediction workload valid (no missed arrivals, scheduling-lag p99 <= 5 ms)",
+    "result": "PASS",
+    "target": "0 missed, p99 lag <= 5 ms",
+    "measured": {
+     "p50": 1.55,
+     "p99": 3.981,
+     "max": 10.381
+    },
+    "detail": "generator-validity check (a failure would invalidate the comparison, not the server)"
+   },
+   {
+    "gate": "P4_r3: prediction 100% success, zero contract/association violations, no timeouts",
+    "result": "PASS",
+    "target": "100%",
+    "measured": 1.0,
+    "detail": "responses validated against expected probability/decision for the exact input"
+   },
+   {
+    "gate": "P4_r3: offered prediction workload valid (no missed arrivals, scheduling-lag p99 <= 5 ms)",
+    "result": "PASS",
+    "target": "0 missed, p99 lag <= 5 ms",
+    "measured": {
+     "p50": 1.133,
+     "p99": 4.778,
+     "max": 13.635
+    },
+    "detail": "generator-validity check (a failure would invalidate the comparison, not the server)"
+   },
+   {
+    "gate": "P5_r1: prediction 100% success, zero contract/association violations, no timeouts",
+    "result": "PASS",
+    "target": "100%",
+    "measured": 1.0,
+    "detail": "responses validated against expected probability/decision for the exact input"
+   },
+   {
+    "gate": "P5_r1: offered prediction workload valid (no missed arrivals, scheduling-lag p99 <= 5 ms)",
+    "result": "PASS",
+    "target": "0 missed, p99 lag <= 5 ms",
+    "measured": {
+     "p50": 0.827,
+     "p99": 2.251,
+     "max": 52.936
+    },
+    "detail": "generator-validity check (a failure would invalidate the comparison, not the server)"
+   },
+   {
+    "gate": "P1_r1: prediction p95 degradation vs matched P0_r1",
+    "result": "PASS",
+    "target": "<= max(20% of baseline, 5 ms) = 5.000 ms",
+    "measured": -2.312,
+    "detail": "request-latency p95; scheduled-arrival p95 reported alongside"
+   },
+   {
+    "gate": "P2_r1: prediction p95 degradation vs matched P0_r1",
+    "result": "PASS",
+    "target": "<= max(20% of baseline, 5 ms) = 5.000 ms",
+    "measured": -1.451,
+    "detail": "request-latency p95; scheduled-arrival p95 reported alongside"
+   },
+   {
+    "gate": "P1_r2: prediction p95 degradation vs matched P0_r2",
+    "result": "PASS",
+    "target": "<= max(20% of baseline, 5 ms) = 5.000 ms",
+    "measured": -3.5,
+    "detail": "request-latency p95; scheduled-arrival p95 reported alongside"
+   },
+   {
+    "gate": "P2_r2: prediction p95 degradation vs matched P0_r2",
+    "result": "PASS",
+    "target": "<= max(20% of baseline, 5 ms) = 5.000 ms",
+    "measured": -3.495,
+    "detail": "request-latency p95; scheduled-arrival p95 reported alongside"
+   },
+   {
+    "gate": "P2_r3: prediction p95 degradation vs matched P0_r3",
+    "result": "FAIL",
+    "target": "<= max(20% of baseline, 5 ms) = 5.000 ms",
+    "measured": 2050.344,
+    "detail": "request-latency p95; scheduled-arrival p95 reported alongside"
+   },
+   {
+    "gate": "P1_r3: prediction p95 degradation vs matched P0_r3",
+    "result": "PASS",
+    "target": "<= max(20% of baseline, 5 ms) = 5.000 ms",
+    "measured": -4.038,
+    "detail": "request-latency p95; scheduled-arrival p95 reported alongside"
+   },
+   {
+    "gate": "P4_r1: prediction p95 degradation vs median P0 baseline",
+    "result": "PASS",
+    "target": "<= 5.000 ms",
+    "measured": -0.031,
+    "detail": "baseline = median of the three unmodified-application P0 repetitions"
+   },
+   {
+    "gate": "P4_r2: prediction p95 degradation vs median P0 baseline",
+    "result": "PASS",
+    "target": "<= 5.000 ms",
+    "measured": 0.865,
+    "detail": "baseline = median of the three unmodified-application P0 repetitions"
+   },
+   {
+    "gate": "P4_r3: prediction p95 degradation vs median P0 baseline",
+    "result": "PASS",
+    "target": "<= 5.000 ms",
+    "measured": 0.123,
+    "detail": "baseline = median of the three unmodified-application P0 repetitions"
+   },
+   {
+    "gate": "P5_r1: prediction p95 degradation vs median P0 baseline",
+    "result": "PASS",
+    "target": "<= 5.000 ms",
+    "measured": -3.163,
+    "detail": "baseline = median of the three unmodified-application P0 repetitions"
+   },
+   {
+    "gate": "P1_r1: explanation successful p95 <= 150 ms",
+    "result": "PASS",
+    "target": "<= 150 ms",
+    "measured": 72.108,
+    "detail": "four closed-loop callers"
+   },
+   {
+    "gate": "P1_r1: no unexpected explanation failures",
+    "result": "PASS",
+    "target": "0 failures",
+    "measured": {
+     "status_counts": {
+      "200": 1905
+     }
+    },
+    "detail": "all completed explanation requests must be 200 with valid, associated payloads"
+   },
+   {
+    "gate": "P1_r2: explanation successful p95 <= 150 ms",
+    "result": "PASS",
+    "target": "<= 150 ms",
+    "measured": 74.977,
+    "detail": "four closed-loop callers"
+   },
+   {
+    "gate": "P1_r2: no unexpected explanation failures",
+    "result": "PASS",
+    "target": "0 failures",
+    "measured": {
+     "status_counts": {
+      "200": 1836
+     }
+    },
+    "detail": "all completed explanation requests must be 200 with valid, associated payloads"
+   },
+   {
+    "gate": "P1_r3: explanation successful p95 <= 150 ms",
+    "result": "PASS",
+    "target": "<= 150 ms",
+    "measured": 78.392,
+    "detail": "four closed-loop callers"
+   },
+   {
+    "gate": "P1_r3: no unexpected explanation failures",
+    "result": "PASS",
+    "target": "0 failures",
+    "measured": {
+     "status_counts": {
+      "200": 1777
+     }
+    },
+    "detail": "all completed explanation requests must be 200 with valid, associated payloads"
+   },
+   {
+    "gate": "P2_r1: explanation successful p95 <= 150 ms",
+    "result": "PASS",
+    "target": "<= 150 ms",
+    "measured": 28.466,
+    "detail": "40 req/s open-loop"
+   },
+   {
+    "gate": "P2_r1: at least 95% successful explanations",
+    "result": "PASS",
+    "target": ">= 0.95",
+    "measured": 1.0,
+    "detail": "successful / completed"
+   },
+   {
+    "gate": "P2_r2: explanation successful p95 <= 150 ms",
+    "result": "PASS",
+    "target": "<= 150 ms",
+    "measured": 29.527,
+    "detail": "40 req/s open-loop"
+   },
+   {
+    "gate": "P2_r2: at least 95% successful explanations",
+    "result": "PASS",
+    "target": ">= 0.95",
+    "measured": 1.0,
+    "detail": "successful / completed"
+   },
+   {
+    "gate": "P2_r3: explanation successful p95 <= 150 ms",
+    "result": "FAIL",
+    "target": "<= 150 ms",
+    "measured": 855.295,
+    "detail": "40 req/s open-loop"
+   },
+   {
+    "gate": "P2_r3: at least 95% successful explanations",
+    "result": "FAIL",
+    "target": ">= 0.95",
+    "measured": 0.7917,
+    "detail": "successful / completed"
+   },
+   {
+    "gate": "P4_r1: dispatcher capacity bounds (<=1 active, <=8 queued, <=9 admitted), zero invariant violations, zero restarts",
+    "result": "PASS",
+    "target": "active<=1, queued<=8, admitted<=9, 0 violations, 0 restarts",
+    "measured": {
+     "high_water": {
+      "active": 1,
+      "queued": 8,
+      "admitted": 9
+     },
+     "restarts_total": 0,
+     "invariant_violations": 0
+    },
+    "detail": "from the instrumented dispatcher diagnostics"
+   },
+   {
+    "gate": "P4_r1: burst outcomes are sanitized, associated and contain no partial results",
+    "result": "PASS",
+    "target": "0 contract violations",
+    "measured": {
+     "status_counts": {
+      "200": 17,
+      "503": 15
+     },
+     "error_codes": {
+      "explanation_overloaded": 15
+     }
+    },
+    "detail": "overload (503 explanation_overloaded) is permitted and expected"
+   },
+   {
+    "gate": "P4_r2: dispatcher capacity bounds (<=1 active, <=8 queued, <=9 admitted), zero invariant violations, zero restarts",
+    "result": "PASS",
+    "target": "active<=1, queued<=8, admitted<=9, 0 violations, 0 restarts",
+    "measured": {
+     "high_water": {
+      "active": 1,
+      "queued": 8,
+      "admitted": 9
+     },
+     "restarts_total": 0,
+     "invariant_violations": 0
+    },
+    "detail": "from the instrumented dispatcher diagnostics"
+   },
+   {
+    "gate": "P4_r2: burst outcomes are sanitized, associated and contain no partial results",
+    "result": "PASS",
+    "target": "0 contract violations",
+    "measured": {
+     "status_counts": {
+      "200": 17,
+      "503": 15
+     },
+     "error_codes": {
+      "explanation_overloaded": 15
+     }
+    },
+    "detail": "overload (503 explanation_overloaded) is permitted and expected"
+   },
+   {
+    "gate": "P4_r3: dispatcher capacity bounds (<=1 active, <=8 queued, <=9 admitted), zero invariant violations, zero restarts",
+    "result": "PASS",
+    "target": "active<=1, queued<=8, admitted<=9, 0 violations, 0 restarts",
+    "measured": {
+     "high_water": {
+      "active": 1,
+      "queued": 8,
+      "admitted": 9
+     },
+     "restarts_total": 0,
+     "invariant_violations": 0
+    },
+    "detail": "from the instrumented dispatcher diagnostics"
+   },
+   {
+    "gate": "P4_r3: burst outcomes are sanitized, associated and contain no partial results",
+    "result": "PASS",
+    "target": "0 contract violations",
+    "measured": {
+     "status_counts": {
+      "200": 17,
+      "503": 15
+     },
+     "error_codes": {
+      "explanation_overloaded": 15
+     }
+    },
+    "detail": "overload (503 explanation_overloaded) is permitted and expected"
+   },
+   {
+    "gate": "P3: explanation-only throughput and latency (reported)",
+    "result": "PASS",
+    "target": "report",
+    "measured": {
+     "throughput_successful_per_s": 60.433,
+     "latency": {
+      "n": 1813,
+      "p50_ms": 63.521,
+      "p95_ms": 80.173,
+      "p99_ms": 133.105,
+      "max_ms": 227.832,
+      "mean_ms": 66.2
+     },
+     "status_counts": {
+      "200": 1813
+     }
+    },
+    "detail": "report-only target; correctness checked"
+   },
+   {
+    "gate": "P3: successful p95 <= 150 ms (informational, the API-level target at four callers)",
+    "result": "PASS",
+    "target": "<= 150 ms",
+    "measured": 80.173,
+    "detail": "four closed-loop callers, no prediction traffic"
+   },
+   {
+    "gate": "P5: sustained container-memory growth after warm-up <= 32 MiB",
+    "result": "PASS",
+    "target": "<= 32 MiB",
+    "measured": {
+     "growth_mib": 1.12,
+     "slope_mib_per_min": 0.301,
+     "samples": 59,
+     "first3_mean_mib": 388.3,
+     "last3_mean_mib": 389.5
+    },
+    "detail": "mean of last three vs first three 5 s samples inside the measured window"
+   },
+   {
+    "gate": "P5: explanation correctness and bounded availability under sustained mixed load",
+    "result": "PASS",
+    "target": "0 contract violations, >= 95% success",
+    "measured": {
+     "success_fraction": 1.0,
+     "status_counts": {
+      "200": 17080
+     },
+     "latency": {
+      "n": 17080,
+      "p50_ms": 69.214,
+      "p95_ms": 82.004,
+      "p99_ms": 95.271,
+      "max_ms": 178.347,
+      "mean_ms": 70.239
+     }
+    },
+    "detail": "four closed-loop callers for five minutes"
+   },
+   {
+    "gate": "P5: bounded admission, zero invariant violations, zero restarts (instrumented diagnostics)",
+    "result": "PASS",
+    "target": "active<=1, queued<=8, admitted<=9",
+    "measured": {
+     "high_water": {
+      "active": 1,
+      "queued": 3,
+      "admitted": 4
+     },
+     "restarts_total": 0
+    },
+    "detail": "from the instrumented dispatcher diagnostics"
+   },
+   {
+    "gate": "P0_r1: memory peak <= 90% of limit and zero OOM",
+    "result": "PASS",
+    "target": "<= 0.9 and 0",
+    "measured": {
+     "peak_fraction": 0.3797,
+     "oom_kill": 0
+    },
+    "detail": "cgroup memory.peak over the container lifetime; memory.events oom_kill; docker OOMKilled"
+   },
+   {
+    "gate": "P0_r1: zero unexpected worker restarts",
+    "result": "PASS",
+    "target": "0 restarts",
+    "measured": {
+     "pid_changed": [],
+     "dispatcher_restarts_total": null
+    },
+    "detail": "child/parent pid unchanged between post-readiness and post-drain; instrumented runs also check dispatcher restarts_total"
+   },
+   {
+    "gate": "P0_r1: file-descriptor counts return to the post-readiness baseline after drain",
+    "result": "PASS",
+    "target": "equal",
+    "measured": {
+     "post_readiness": {
+      "parent": 14,
+      "child": 9
+     },
+     "post_drain": {
+      "parent": 14,
+      "child": 9
+     },
+     "parent_threads_informational": {
+      "post_readiness": 11,
+      "post_drain": 11
+     }
+    },
+    "detail": "parent and child fd count, post-readiness vs post-drain (3 s after the load generator exited)"
+   },
+   {
+    "gate": "P0_r1: clean server shutdown (exit code 0, not OOM-killed, no traceback, stop within the 15 s grace)",
+    "result": "PASS",
+    "target": "exit 0, no traceback",
+    "measured": {
+     "exit_code_oom_killed": "0 false",
+     "stop_s": 1.41
+    },
+    "detail": "docker stop/inspect/logs; the server ran at warning log level, so the 'shutdown complete' line is verified only in the flat-image Uvicorn test"
+   },
+   {
+    "gate": "P1_r1: memory peak <= 90% of limit and zero OOM",
+    "result": "PASS",
+    "target": "<= 0.9 and 0",
+    "measured": {
+     "peak_fraction": 0.3797,
+     "oom_kill": 0
+    },
+    "detail": "cgroup memory.peak over the container lifetime; memory.events oom_kill; docker OOMKilled"
+   },
+   {
+    "gate": "P1_r1: zero unexpected worker restarts",
+    "result": "PASS",
+    "target": "0 restarts",
+    "measured": {
+     "pid_changed": [],
+     "dispatcher_restarts_total": null
+    },
+    "detail": "child/parent pid unchanged between post-readiness and post-drain; instrumented runs also check dispatcher restarts_total"
+   },
+   {
+    "gate": "P1_r1: file-descriptor counts return to the post-readiness baseline after drain",
+    "result": "PASS",
+    "target": "equal",
+    "measured": {
+     "post_readiness": {
+      "parent": 14,
+      "child": 9
+     },
+     "post_drain": {
+      "parent": 14,
+      "child": 9
+     },
+     "parent_threads_informational": {
+      "post_readiness": 11,
+      "post_drain": 12
+     }
+    },
+    "detail": "parent and child fd count, post-readiness vs post-drain (3 s after the load generator exited)"
+   },
+   {
+    "gate": "P1_r1: clean server shutdown (exit code 0, not OOM-killed, no traceback, stop within the 15 s grace)",
+    "result": "PASS",
+    "target": "exit 0, no traceback",
+    "measured": {
+     "exit_code_oom_killed": "0 false",
+     "stop_s": 1.29
+    },
+    "detail": "docker stop/inspect/logs; the server ran at warning log level, so the 'shutdown complete' line is verified only in the flat-image Uvicorn test"
+   },
+   {
+    "gate": "P2_r1: memory peak <= 90% of limit and zero OOM",
+    "result": "PASS",
+    "target": "<= 0.9 and 0",
+    "measured": {
+     "peak_fraction": 0.3808,
+     "oom_kill": 0
+    },
+    "detail": "cgroup memory.peak over the container lifetime; memory.events oom_kill; docker OOMKilled"
+   },
+   {
+    "gate": "P2_r1: zero unexpected worker restarts",
+    "result": "PASS",
+    "target": "0 restarts",
+    "measured": {
+     "pid_changed": [],
+     "dispatcher_restarts_total": null
+    },
+    "detail": "child/parent pid unchanged between post-readiness and post-drain; instrumented runs also check dispatcher restarts_total"
+   },
+   {
+    "gate": "P2_r1: file-descriptor counts return to the post-readiness baseline after drain",
+    "result": "PASS",
+    "target": "equal",
+    "measured": {
+     "post_readiness": {
+      "parent": 14,
+      "child": 9
+     },
+     "post_drain": {
+      "parent": 14,
+      "child": 9
+     },
+     "parent_threads_informational": {
+      "post_readiness": 11,
+      "post_drain": 12
+     }
+    },
+    "detail": "parent and child fd count, post-readiness vs post-drain (3 s after the load generator exited)"
+   },
+   {
+    "gate": "P2_r1: clean server shutdown (exit code 0, not OOM-killed, no traceback, stop within the 15 s grace)",
+    "result": "PASS",
+    "target": "exit 0, no traceback",
+    "measured": {
+     "exit_code_oom_killed": "0 false",
+     "stop_s": 1.29
+    },
+    "detail": "docker stop/inspect/logs; the server ran at warning log level, so the 'shutdown complete' line is verified only in the flat-image Uvicorn test"
+   },
+   {
+    "gate": "P1_r2: memory peak <= 90% of limit and zero OOM",
+    "result": "PASS",
+    "target": "<= 0.9 and 0",
+    "measured": {
+     "peak_fraction": 0.3812,
+     "oom_kill": 0
+    },
+    "detail": "cgroup memory.peak over the container lifetime; memory.events oom_kill; docker OOMKilled"
+   },
+   {
+    "gate": "P1_r2: zero unexpected worker restarts",
+    "result": "PASS",
+    "target": "0 restarts",
+    "measured": {
+     "pid_changed": [],
+     "dispatcher_restarts_total": null
+    },
+    "detail": "child/parent pid unchanged between post-readiness and post-drain; instrumented runs also check dispatcher restarts_total"
+   },
+   {
+    "gate": "P1_r2: file-descriptor counts return to the post-readiness baseline after drain",
+    "result": "PASS",
+    "target": "equal",
+    "measured": {
+     "post_readiness": {
+      "parent": 14,
+      "child": 9
+     },
+     "post_drain": {
+      "parent": 14,
+      "child": 9
+     },
+     "parent_threads_informational": {
+      "post_readiness": 11,
+      "post_drain": 18
+     }
+    },
+    "detail": "parent and child fd count, post-readiness vs post-drain (3 s after the load generator exited)"
+   },
+   {
+    "gate": "P1_r2: clean server shutdown (exit code 0, not OOM-killed, no traceback, stop within the 15 s grace)",
+    "result": "PASS",
+    "target": "exit 0, no traceback",
+    "measured": {
+     "exit_code_oom_killed": "0 false",
+     "stop_s": 1.25
+    },
+    "detail": "docker stop/inspect/logs; the server ran at warning log level, so the 'shutdown complete' line is verified only in the flat-image Uvicorn test"
+   },
+   {
+    "gate": "P2_r2: memory peak <= 90% of limit and zero OOM",
+    "result": "PASS",
+    "target": "<= 0.9 and 0",
+    "measured": {
+     "peak_fraction": 0.3813,
+     "oom_kill": 0
+    },
+    "detail": "cgroup memory.peak over the container lifetime; memory.events oom_kill; docker OOMKilled"
+   },
+   {
+    "gate": "P2_r2: zero unexpected worker restarts",
+    "result": "PASS",
+    "target": "0 restarts",
+    "measured": {
+     "pid_changed": [],
+     "dispatcher_restarts_total": null
+    },
+    "detail": "child/parent pid unchanged between post-readiness and post-drain; instrumented runs also check dispatcher restarts_total"
+   },
+   {
+    "gate": "P2_r2: file-descriptor counts return to the post-readiness baseline after drain",
+    "result": "PASS",
+    "target": "equal",
+    "measured": {
+     "post_readiness": {
+      "parent": 14,
+      "child": 9
+     },
+     "post_drain": {
+      "parent": 14,
+      "child": 9
+     },
+     "parent_threads_informational": {
+      "post_readiness": 11,
+      "post_drain": 13
+     }
+    },
+    "detail": "parent and child fd count, post-readiness vs post-drain (3 s after the load generator exited)"
+   },
+   {
+    "gate": "P2_r2: clean server shutdown (exit code 0, not OOM-killed, no traceback, stop within the 15 s grace)",
+    "result": "PASS",
+    "target": "exit 0, no traceback",
+    "measured": {
+     "exit_code_oom_killed": "0 false",
+     "stop_s": 1.34
+    },
+    "detail": "docker stop/inspect/logs; the server ran at warning log level, so the 'shutdown complete' line is verified only in the flat-image Uvicorn test"
+   },
+   {
+    "gate": "P0_r2: memory peak <= 90% of limit and zero OOM",
+    "result": "PASS",
+    "target": "<= 0.9 and 0",
+    "measured": {
+     "peak_fraction": 0.3799,
+     "oom_kill": 0
+    },
+    "detail": "cgroup memory.peak over the container lifetime; memory.events oom_kill; docker OOMKilled"
+   },
+   {
+    "gate": "P0_r2: zero unexpected worker restarts",
+    "result": "PASS",
+    "target": "0 restarts",
+    "measured": {
+     "pid_changed": [],
+     "dispatcher_restarts_total": null
+    },
+    "detail": "child/parent pid unchanged between post-readiness and post-drain; instrumented runs also check dispatcher restarts_total"
+   },
+   {
+    "gate": "P0_r2: file-descriptor counts return to the post-readiness baseline after drain",
+    "result": "PASS",
+    "target": "equal",
+    "measured": {
+     "post_readiness": {
+      "parent": 14,
+      "child": 9
+     },
+     "post_drain": {
+      "parent": 14,
+      "child": 9
+     },
+     "parent_threads_informational": {
+      "post_readiness": 11,
+      "post_drain": 11
+     }
+    },
+    "detail": "parent and child fd count, post-readiness vs post-drain (3 s after the load generator exited)"
+   },
+   {
+    "gate": "P0_r2: clean server shutdown (exit code 0, not OOM-killed, no traceback, stop within the 15 s grace)",
+    "result": "PASS",
+    "target": "exit 0, no traceback",
+    "measured": {
+     "exit_code_oom_killed": "0 false",
+     "stop_s": 1.32
+    },
+    "detail": "docker stop/inspect/logs; the server ran at warning log level, so the 'shutdown complete' line is verified only in the flat-image Uvicorn test"
+   },
+   {
+    "gate": "P2_r3: memory peak <= 90% of limit and zero OOM",
+    "result": "PASS",
+    "target": "<= 0.9 and 0",
+    "measured": {
+     "peak_fraction": 0.3805,
+     "oom_kill": 0
+    },
+    "detail": "cgroup memory.peak over the container lifetime; memory.events oom_kill; docker OOMKilled"
+   },
+   {
+    "gate": "P2_r3: zero unexpected worker restarts",
+    "result": "FAIL",
+    "target": "0 restarts",
+    "measured": {
+     "pid_changed": [
+      "child"
+     ],
+     "dispatcher_restarts_total": null
+    },
+    "detail": "child/parent pid unchanged between post-readiness and post-drain; instrumented runs also check dispatcher restarts_total"
+   },
+   {
+    "gate": "P2_r3: file-descriptor counts return to the post-readiness baseline after drain",
+    "result": "PASS",
+    "target": "equal",
+    "measured": {
+     "post_readiness": {
+      "parent": 14,
+      "child": 9
+     },
+     "post_drain": {
+      "parent": 14,
+      "child": 9
+     },
+     "parent_threads_informational": {
+      "post_readiness": 11,
+      "post_drain": 17
+     }
+    },
+    "detail": "parent and child fd count, post-readiness vs post-drain (3 s after the load generator exited)"
+   },
+   {
+    "gate": "P2_r3: clean server shutdown (exit code 0, not OOM-killed, no traceback, stop within the 15 s grace)",
+    "result": "PASS",
+    "target": "exit 0, no traceback",
+    "measured": {
+     "exit_code_oom_killed": "0 false",
+     "stop_s": 1.54
+    },
+    "detail": "docker stop/inspect/logs; the server ran at warning log level, so the 'shutdown complete' line is verified only in the flat-image Uvicorn test"
+   },
+   {
+    "gate": "P0_r3: memory peak <= 90% of limit and zero OOM",
+    "result": "PASS",
+    "target": "<= 0.9 and 0",
+    "measured": {
+     "peak_fraction": 0.3798,
+     "oom_kill": 0
+    },
+    "detail": "cgroup memory.peak over the container lifetime; memory.events oom_kill; docker OOMKilled"
+   },
+   {
+    "gate": "P0_r3: zero unexpected worker restarts",
+    "result": "PASS",
+    "target": "0 restarts",
+    "measured": {
+     "pid_changed": [],
+     "dispatcher_restarts_total": null
+    },
+    "detail": "child/parent pid unchanged between post-readiness and post-drain; instrumented runs also check dispatcher restarts_total"
+   },
+   {
+    "gate": "P0_r3: file-descriptor counts return to the post-readiness baseline after drain",
+    "result": "PASS",
+    "target": "equal",
+    "measured": {
+     "post_readiness": {
+      "parent": 14,
+      "child": 9
+     },
+     "post_drain": {
+      "parent": 14,
+      "child": 9
+     },
+     "parent_threads_informational": {
+      "post_readiness": 11,
+      "post_drain": 12
+     }
+    },
+    "detail": "parent and child fd count, post-readiness vs post-drain (3 s after the load generator exited)"
+   },
+   {
+    "gate": "P0_r3: clean server shutdown (exit code 0, not OOM-killed, no traceback, stop within the 15 s grace)",
+    "result": "PASS",
+    "target": "exit 0, no traceback",
+    "measured": {
+     "exit_code_oom_killed": "0 false",
+     "stop_s": 1.33
+    },
+    "detail": "docker stop/inspect/logs; the server ran at warning log level, so the 'shutdown complete' line is verified only in the flat-image Uvicorn test"
+   },
+   {
+    "gate": "P1_r3: memory peak <= 90% of limit and zero OOM",
+    "result": "PASS",
+    "target": "<= 0.9 and 0",
+    "measured": {
+     "peak_fraction": 0.3801,
+     "oom_kill": 0
+    },
+    "detail": "cgroup memory.peak over the container lifetime; memory.events oom_kill; docker OOMKilled"
+   },
+   {
+    "gate": "P1_r3: zero unexpected worker restarts",
+    "result": "PASS",
+    "target": "0 restarts",
+    "measured": {
+     "pid_changed": [],
+     "dispatcher_restarts_total": null
+    },
+    "detail": "child/parent pid unchanged between post-readiness and post-drain; instrumented runs also check dispatcher restarts_total"
+   },
+   {
+    "gate": "P1_r3: file-descriptor counts return to the post-readiness baseline after drain",
+    "result": "PASS",
+    "target": "equal",
+    "measured": {
+     "post_readiness": {
+      "parent": 14,
+      "child": 9
+     },
+     "post_drain": {
+      "parent": 14,
+      "child": 9
+     },
+     "parent_threads_informational": {
+      "post_readiness": 11,
+      "post_drain": 11
+     }
+    },
+    "detail": "parent and child fd count, post-readiness vs post-drain (3 s after the load generator exited)"
+   },
+   {
+    "gate": "P1_r3: clean server shutdown (exit code 0, not OOM-killed, no traceback, stop within the 15 s grace)",
+    "result": "PASS",
+    "target": "exit 0, no traceback",
+    "measured": {
+     "exit_code_oom_killed": "0 false",
+     "stop_s": 1.03
+    },
+    "detail": "docker stop/inspect/logs; the server ran at warning log level, so the 'shutdown complete' line is verified only in the flat-image Uvicorn test"
+   },
+   {
+    "gate": "P3_r1: memory peak <= 90% of limit and zero OOM",
+    "result": "PASS",
+    "target": "<= 0.9 and 0",
+    "measured": {
+     "peak_fraction": 0.3802,
+     "oom_kill": 0
+    },
+    "detail": "cgroup memory.peak over the container lifetime; memory.events oom_kill; docker OOMKilled"
+   },
+   {
+    "gate": "P3_r1: zero unexpected worker restarts",
+    "result": "PASS",
+    "target": "0 restarts",
+    "measured": {
+     "pid_changed": [],
+     "dispatcher_restarts_total": null
+    },
+    "detail": "child/parent pid unchanged between post-readiness and post-drain; instrumented runs also check dispatcher restarts_total"
+   },
+   {
+    "gate": "P3_r1: file-descriptor counts return to the post-readiness baseline after drain",
+    "result": "PASS",
+    "target": "equal",
+    "measured": {
+     "post_readiness": {
+      "parent": 14,
+      "child": 9
+     },
+     "post_drain": {
+      "parent": 14,
+      "child": 9
+     },
+     "parent_threads_informational": {
+      "post_readiness": 11,
+      "post_drain": 11
+     }
+    },
+    "detail": "parent and child fd count, post-readiness vs post-drain (3 s after the load generator exited)"
+   },
+   {
+    "gate": "P3_r1: clean server shutdown (exit code 0, not OOM-killed, no traceback, stop within the 15 s grace)",
+    "result": "PASS",
+    "target": "exit 0, no traceback",
+    "measured": {
+     "exit_code_oom_killed": "0 false",
+     "stop_s": 1.2
+    },
+    "detail": "docker stop/inspect/logs; the server ran at warning log level, so the 'shutdown complete' line is verified only in the flat-image Uvicorn test"
+   },
+   {
+    "gate": "P4_r1: memory peak <= 90% of limit and zero OOM",
+    "result": "PASS",
+    "target": "<= 0.9 and 0",
+    "measured": {
+     "peak_fraction": 0.3816,
+     "oom_kill": 0
+    },
+    "detail": "cgroup memory.peak over the container lifetime; memory.events oom_kill; docker OOMKilled"
+   },
+   {
+    "gate": "P4_r1: zero unexpected worker restarts",
+    "result": "PASS",
+    "target": "0 restarts",
+    "measured": {
+     "pid_changed": [],
+     "dispatcher_restarts_total": 0
+    },
+    "detail": "child/parent pid unchanged between post-readiness and post-drain; instrumented runs also check dispatcher restarts_total"
+   },
+   {
+    "gate": "P4_r1: file-descriptor counts return to the post-readiness baseline after drain",
+    "result": "PASS",
+    "target": "equal",
+    "measured": {
+     "post_readiness": {
+      "parent": 14,
+      "child": 9
+     },
+     "post_drain": {
+      "parent": 14,
+      "child": 9
+     },
+     "parent_threads_informational": {
+      "post_readiness": 11,
+      "post_drain": 12
+     }
+    },
+    "detail": "parent and child fd count, post-readiness vs post-drain (3 s after the load generator exited)"
+   },
+   {
+    "gate": "P4_r1: clean server shutdown (exit code 0, not OOM-killed, no traceback, stop within the 15 s grace)",
+    "result": "PASS",
+    "target": "exit 0, no traceback",
+    "measured": {
+     "exit_code_oom_killed": "0 false",
+     "stop_s": 1.35
+    },
+    "detail": "docker stop/inspect/logs; the server ran at warning log level, so the 'shutdown complete' line is verified only in the flat-image Uvicorn test"
+   },
+   {
+    "gate": "P4_r2: memory peak <= 90% of limit and zero OOM",
+    "result": "PASS",
+    "target": "<= 0.9 and 0",
+    "measured": {
+     "peak_fraction": 0.3802,
+     "oom_kill": 0
+    },
+    "detail": "cgroup memory.peak over the container lifetime; memory.events oom_kill; docker OOMKilled"
+   },
+   {
+    "gate": "P4_r2: zero unexpected worker restarts",
+    "result": "PASS",
+    "target": "0 restarts",
+    "measured": {
+     "pid_changed": [],
+     "dispatcher_restarts_total": 0
+    },
+    "detail": "child/parent pid unchanged between post-readiness and post-drain; instrumented runs also check dispatcher restarts_total"
+   },
+   {
+    "gate": "P4_r2: file-descriptor counts return to the post-readiness baseline after drain",
+    "result": "PASS",
+    "target": "equal",
+    "measured": {
+     "post_readiness": {
+      "parent": 14,
+      "child": 9
+     },
+     "post_drain": {
+      "parent": 14,
+      "child": 9
+     },
+     "parent_threads_informational": {
+      "post_readiness": 11,
+      "post_drain": 13
+     }
+    },
+    "detail": "parent and child fd count, post-readiness vs post-drain (3 s after the load generator exited)"
+   },
+   {
+    "gate": "P4_r2: clean server shutdown (exit code 0, not OOM-killed, no traceback, stop within the 15 s grace)",
+    "result": "PASS",
+    "target": "exit 0, no traceback",
+    "measured": {
+     "exit_code_oom_killed": "0 false",
+     "stop_s": 1.37
+    },
+    "detail": "docker stop/inspect/logs; the server ran at warning log level, so the 'shutdown complete' line is verified only in the flat-image Uvicorn test"
+   },
+   {
+    "gate": "P4_r3: memory peak <= 90% of limit and zero OOM",
+    "result": "PASS",
+    "target": "<= 0.9 and 0",
+    "measured": {
+     "peak_fraction": 0.3801,
+     "oom_kill": 0
+    },
+    "detail": "cgroup memory.peak over the container lifetime; memory.events oom_kill; docker OOMKilled"
+   },
+   {
+    "gate": "P4_r3: zero unexpected worker restarts",
+    "result": "PASS",
+    "target": "0 restarts",
+    "measured": {
+     "pid_changed": [],
+     "dispatcher_restarts_total": 0
+    },
+    "detail": "child/parent pid unchanged between post-readiness and post-drain; instrumented runs also check dispatcher restarts_total"
+   },
+   {
+    "gate": "P4_r3: file-descriptor counts return to the post-readiness baseline after drain",
+    "result": "PASS",
+    "target": "equal",
+    "measured": {
+     "post_readiness": {
+      "parent": 14,
+      "child": 9
+     },
+     "post_drain": {
+      "parent": 14,
+      "child": 9
+     },
+     "parent_threads_informational": {
+      "post_readiness": 11,
+      "post_drain": 12
+     }
+    },
+    "detail": "parent and child fd count, post-readiness vs post-drain (3 s after the load generator exited)"
+   },
+   {
+    "gate": "P4_r3: clean server shutdown (exit code 0, not OOM-killed, no traceback, stop within the 15 s grace)",
+    "result": "PASS",
+    "target": "exit 0, no traceback",
+    "measured": {
+     "exit_code_oom_killed": "0 false",
+     "stop_s": 1.4
+    },
+    "detail": "docker stop/inspect/logs; the server ran at warning log level, so the 'shutdown complete' line is verified only in the flat-image Uvicorn test"
+   },
+   {
+    "gate": "P5_r1: memory peak <= 90% of limit and zero OOM",
+    "result": "PASS",
+    "target": "<= 0.9 and 0",
+    "measured": {
+     "peak_fraction": 0.3827,
+     "oom_kill": 0
+    },
+    "detail": "cgroup memory.peak over the container lifetime; memory.events oom_kill; docker OOMKilled"
+   },
+   {
+    "gate": "P5_r1: zero unexpected worker restarts",
+    "result": "PASS",
+    "target": "0 restarts",
+    "measured": {
+     "pid_changed": [],
+     "dispatcher_restarts_total": 0
+    },
+    "detail": "child/parent pid unchanged between post-readiness and post-drain; instrumented runs also check dispatcher restarts_total"
+   },
+   {
+    "gate": "P5_r1: file-descriptor counts return to the post-readiness baseline after drain",
+    "result": "PASS",
+    "target": "equal",
+    "measured": {
+     "post_readiness": {
+      "parent": 14,
+      "child": 9
+     },
+     "post_drain": {
+      "parent": 14,
+      "child": 9
+     },
+     "parent_threads_informational": {
+      "post_readiness": 11,
+      "post_drain": 11
+     }
+    },
+    "detail": "parent and child fd count, post-readiness vs post-drain (3 s after the load generator exited)"
+   },
+   {
+    "gate": "P5_r1: clean server shutdown (exit code 0, not OOM-killed, no traceback, stop within the 15 s grace)",
+    "result": "PASS",
+    "target": "exit 0, no traceback",
+    "measured": {
+     "exit_code_oom_killed": "0 false",
+     "stop_s": 1.26
+    },
+    "detail": "docker stop/inspect/logs; the server ran at warning log level, so the 'shutdown complete' line is verified only in the flat-image Uvicorn test"
+   },
+   {
+    "gate": "P5: no persistent thread or file-descriptor growth after drain (parent and child equal to the post-readiness baseline)",
+    "result": "PASS",
+    "target": "equal",
+    "measured": {
+     "baseline": {
+      "parent": {
+       "threads": 11,
+       "fds": 14
+      },
+      "child": {
+       "threads": 8,
+       "fds": 9
+      }
+     },
+     "post_drain": {
+      "parent": {
+       "threads": 11,
+       "fds": 14
+      },
+      "child": {
+       "threads": 8,
+       "fds": 9
+      }
+     },
+     "first_window_sample_parent": {
+      "threads": 20,
+      "fds": 36
+     },
+     "last_window_sample_parent": {
+      "threads": 11,
+      "fds": 20
+     }
+    },
+    "detail": "soak run; first and last in-window samples reported for context"
+   },
+   {
+    "gate": "Serial engine reference p95 <= 25 ms (existing performance smoke test, 1 CPU, 1 thread)",
+    "result": "PASS",
+    "target": "<= 25 ms",
+    "measured": {
+     "p50_ms": 15.009,
+     "p95_ms": 22.411,
+     "p99_ms": 23.446,
+     "max_ms": 29.774,
+     "calls": 200,
+     "configuration": "existing smoke test, 1 CPU, 1 torch intra-op thread, canonical image (not the HTTP path)"
+    },
+    "detail": "separate from HTTP latency"
+   },
+   {
+    "gate": "Flat-image integration and regression suites pass",
+    "result": "PASS",
+    "target": "0 failures/errors",
+    "measured": {
+     "flat_image_suite": {
+      "ran": 42,
+      "skipped": 6,
+      "failures": 0,
+      "errors": 0
+     },
+     "level8_repository_layout": {
+      "ran": 180,
+      "skipped": 3,
+      "failures": 0,
+      "errors": 0,
+      "note": "2 opt-in engine skips + the flat-image module reporting NOT APPLICABLE in the repository layout"
+     },
+     "level7_repository_layout_with_frozen_guard": {
+      "ran": 45,
+      "skipped": 3,
+      "failures": 0,
+      "errors": 0,
+      "note": "frozen-file guard run with FROZEN_REQUIRE_LOCAL=1"
+     },
+     "engine_performance_smoke_run": {
+      "ran": 32,
+      "skipped": 1,
+      "failures": 0,
+      "errors": 0
+     }
+    },
+    "detail": "see regression_counts"
+   }
+  ],
+  "flat_layout_verification": {
+   "image_layout": "/app flat; explicit allowlist of 6 committed Level 8/7 modules over the original Level 7 image; verified file list equals the allowlist plus the original image files",
+   "packages_added_exactly": [
+    "captum==0.9.0",
+    "contourpy==1.4.0",
+    "cycler==0.12.1",
+    "fonttools==4.68.0",
+    "kiwisolver==1.5.1",
+    "matplotlib==3.11.2",
+    "packaging==26.3",
+    "pillow==13.0.0",
+    "pyparsing==3.3.3",
+    "tqdm==4.70.1"
+   ],
+   "package_inventory": "34 -> 44 packages, diff = exactly those ten; zero version changes; pip check clean; installed with --no-index --no-deps --require-hashes",
+   "tests": {
+    "ran": 42,
+    "skipped": 6,
+    "failures": 0,
+    "errors": 0,
+    "breakdown": "6 new flat-image tests + 36 Level 7 flat tests with LEVEL7_REQUIRE_BUNDLE_TESTS=1 (6 expected NOT APPLICABLE skips, as in docs/environments.md)"
+   },
+   "checks": [
+    "image contains only allowlisted files (no dataset, holdout, development checkpoint, training code, src/)",
+    "committed F1 Level 7 service (022c275f...) replaces the stale original",
+    "import starts no child/thread; serving root resolves to /app; parent integrity passed",
+    "tampered artifact fails the parent integrity check",
+    "real worker: readiness, child 1/1 threads, no forbidden modules, explanation == verified engine (exact) == repository-layout golden values, prediction parity, strict contracts, sanitized errors, no-store",
+    "parent Torch settings unchanged",
+    "python -m uvicorn level8_service:app: serves, one worker + resource tracker, graceful shutdown, no leftovers"
+   ]
+  },
+  "regression_counts": {
+   "flat_image_suite": {
+    "ran": 42,
+    "skipped": 6,
+    "failures": 0,
+    "errors": 0
+   },
+   "level8_repository_layout": {
+    "ran": 180,
+    "skipped": 3,
+    "failures": 0,
+    "errors": 0,
+    "note": "2 opt-in engine skips + the flat-image module reporting NOT APPLICABLE in the repository layout"
+   },
+   "level7_repository_layout_with_frozen_guard": {
+    "ran": 45,
+    "skipped": 3,
+    "failures": 0,
+    "errors": 0,
+    "note": "frozen-file guard run with FROZEN_REQUIRE_LOCAL=1"
+   },
+   "engine_performance_smoke_run": {
+    "ran": 32,
+    "skipped": 1,
+    "failures": 0,
+    "errors": 0
+   }
+  },
+  "engine_reference_smoke": {
+   "p50_ms": 15.009,
+   "p95_ms": 22.411,
+   "p99_ms": 23.446,
+   "max_ms": 29.774,
+   "calls": 200,
+   "configuration": "existing smoke test, 1 CPU, 1 torch intra-op thread, canonical image (not the HTTP path)"
+  },
+  "known_limitations": [
+   "Single host, Docker Desktop VM, hyper-threaded 4-core CPU: results are engineering evidence, not production SLOs; a CPU quota is not physical isolation.",
+   "Whether process separation provides CPU or memory isolation is not established: server and worker share one cgroup and CPU quota.",
+   "P4 and P5 used a benchmark wrapper with one polled diagnostics route; their dispatcher counters come from that instrumentation, P0-P3 have none.",
+   "Parent thread counts at post-drain are informational: the request thread pool keeps idle threads for a while, and the 3 s drain window is shorter than its idle timeout.",
+   "Uvicorn 'shutdown complete' is verified in the flat-image test (info log level); the benchmark servers ran at warning level.",
+   "The cause of the execution-deadline event in P2_r3 was not established.",
+   "Verified on canonical Linux/amd64 only; python -m uvicorn is the only supported launcher; no production Dockerfile or packager exists yet."
+  ],
+  "harness_and_source_hashes": {
+   "tests/level8_loadgen.py": "a3664167a01fa98f91f7cd8529eeb1051c04ed6bf7ad28eb40bf7a87f10a7d80",
+   "tests/test_level8_image.py": "9c53ea7acc2aa688bbdfc476f5ea23867596d8eaad6133bde87b718d30a83ae1",
+   "scratch_orchestrator": "a5b27abf27865f19d3a6198ad39a0a715fa693649d9e4fd5be8be16cf27b3060",
+   "scratch_instrumentation_wrapper": "63a228c9449b8eac3bbfb0f85cb104f06c5c5e866e058db5a59dc04718ba1bb7",
+   "committed_modules_in_image": {
+    "level7_service": "022c275f7d4f4cc05ee06fa03fb1a04dc4ecfe2a60a45c8545c6738dded1b9ad",
+    "level8_explain": "2aeba544ef2e51565d647a5e6a3805f73d09cddb5365a3926fa1b0989694e4f9",
+    "level8_worker": "3789d6ecf1340f9e8e133295c82d375ab5a7919346e2f44170e875ce3bba24f8",
+    "level8_dispatch": "e9d94332e5cc4a5aa12fc087eecdb0d3d1b1e3c5dcbaad2f100f3935ac514d0a",
+    "level8_schemas": "dbdb693718e3845e292d6b4956096e27385f62b07498e79a835322747a146685",
+    "level8_service": "989e1d3c695ed751ea99bfe9d193f6aa445a5947df5dfdc9c3b0878dd9b8f6f7"
+   },
+   "requirements-level8.lock": "23f394e3eaa5624a227977b434eb3f1207294de3ae8b63c777d32e0daaccf428"
+  },
+  "generated_by": "scratch evidence assembler (not part of the repository); raw per-request measurements retained outside the repository"
+ },
+ "reviewed_gate_reconciliation": {
+  "original_reported_totals": {
+   "total": 118,
+   "PASS": 113,
+   "FAIL": 5,
+   "NOT VERIFIED": 0
+  },
+  "what_changed_after_measurement": [
+   "L8-2D replaced the per-run 'no thread growth after drain' criterion by a file-descriptor gate per run and a thread/fd gate for the soak run only, after seeing that parent thread counts were elevated 3 s after drain. This was a retrospective change.",
+   "L8-2D replaced the 'no worker-process or dispatcher-thread leaks after shutdown' criterion by a per-run 'clean server shutdown' gate (exit code, OOM flag, traceback, stop time) because 'shutdown complete' is not logged at warning level. Those 14 gates are substitute evidence."
+  ],
+  "removed_from_reviewed_set": {
+   "substitute_clean_shutdown_gates": 14,
+   "substitute_results": {
+    "PASS": 14
+   },
+   "p5_combined_thread_fd_gate": 1
+  },
+  "added_to_reviewed_set": {
+   "per_run_thread_criterion_original_wording": 14,
+   "shutdown_leak_criterion": {
+    "flat_image_uvicorn_test": "PASS",
+    "per_benchmark_run": "NOT VERIFIED (container teardown masks leaks; no per-run process audit)"
+   }
+  },
+  "thread_criterion_per_run": [
+   {
+    "run": "P0_r1",
+    "parent_threads_post_readiness": 11,
+    "parent_threads_post_drain": 11,
+    "child_threads_post_readiness": 8,
+    "child_threads_post_drain": 8,
+    "child_pid_unchanged": true,
+    "drain_interval_s": 3.0,
+    "original_criterion_literal_result": "PASS",
+    "persistent_growth_established": false,
+    "reviewed_classification": "PASS"
+   },
+   {
+    "run": "P1_r1",
+    "parent_threads_post_readiness": 11,
+    "parent_threads_post_drain": 12,
+    "child_threads_post_readiness": 8,
+    "child_threads_post_drain": 8,
+    "child_pid_unchanged": true,
+    "drain_interval_s": 3.0,
+    "original_criterion_literal_result": "FAIL",
+    "persistent_growth_established": "NOT ESTABLISHED (3 s drain is shorter than the anyio idle-pruning behaviour; counts return only on a later threadpool call)",
+    "reviewed_classification": "NOT VERIFIED"
+   },
+   {
+    "run": "P2_r1",
+    "parent_threads_post_readiness": 11,
+    "parent_threads_post_drain": 12,
+    "child_threads_post_readiness": 8,
+    "child_threads_post_drain": 8,
+    "child_pid_unchanged": true,
+    "drain_interval_s": 3.0,
+    "original_criterion_literal_result": "FAIL",
+    "persistent_growth_established": "NOT ESTABLISHED (3 s drain is shorter than the anyio idle-pruning behaviour; counts return only on a later threadpool call)",
+    "reviewed_classification": "NOT VERIFIED"
+   },
+   {
+    "run": "P1_r2",
+    "parent_threads_post_readiness": 11,
+    "parent_threads_post_drain": 18,
+    "child_threads_post_readiness": 8,
+    "child_threads_post_drain": 8,
+    "child_pid_unchanged": true,
+    "drain_interval_s": 3.0,
+    "original_criterion_literal_result": "FAIL",
+    "persistent_growth_established": "NOT ESTABLISHED (3 s drain is shorter than the anyio idle-pruning behaviour; counts return only on a later threadpool call)",
+    "reviewed_classification": "NOT VERIFIED"
+   },
+   {
+    "run": "P2_r2",
+    "parent_threads_post_readiness": 11,
+    "parent_threads_post_drain": 13,
+    "child_threads_post_readiness": 8,
+    "child_threads_post_drain": 8,
+    "child_pid_unchanged": true,
+    "drain_interval_s": 3.0,
+    "original_criterion_literal_result": "FAIL",
+    "persistent_growth_established": "NOT ESTABLISHED (3 s drain is shorter than the anyio idle-pruning behaviour; counts return only on a later threadpool call)",
+    "reviewed_classification": "NOT VERIFIED"
+   },
+   {
+    "run": "P0_r2",
+    "parent_threads_post_readiness": 11,
+    "parent_threads_post_drain": 11,
+    "child_threads_post_readiness": 8,
+    "child_threads_post_drain": 8,
+    "child_pid_unchanged": true,
+    "drain_interval_s": 3.0,
+    "original_criterion_literal_result": "PASS",
+    "persistent_growth_established": false,
+    "reviewed_classification": "PASS"
+   },
+   {
+    "run": "P2_r3",
+    "parent_threads_post_readiness": 11,
+    "parent_threads_post_drain": 17,
+    "child_threads_post_readiness": 8,
+    "child_threads_post_drain": 8,
+    "child_pid_unchanged": false,
+    "drain_interval_s": 3.0,
+    "original_criterion_literal_result": "FAIL",
+    "persistent_growth_established": "NOT ESTABLISHED (3 s drain is shorter than the anyio idle-pruning behaviour; counts return only on a later threadpool call)",
+    "reviewed_classification": "NOT VERIFIED (worker replaced during the run: counts are not comparable; the restart is reported by its own failed gate)"
+   },
+   {
+    "run": "P0_r3",
+    "parent_threads_post_readiness": 11,
+    "parent_threads_post_drain": 12,
+    "child_threads_post_readiness": 8,
+    "child_threads_post_drain": 8,
+    "child_pid_unchanged": true,
+    "drain_interval_s": 3.0,
+    "original_criterion_literal_result": "FAIL",
+    "persistent_growth_established": "NOT ESTABLISHED (3 s drain is shorter than the anyio idle-pruning behaviour; counts return only on a later threadpool call)",
+    "reviewed_classification": "NOT VERIFIED"
+   },
+   {
+    "run": "P1_r3",
+    "parent_threads_post_readiness": 11,
+    "parent_threads_post_drain": 11,
+    "child_threads_post_readiness": 8,
+    "child_threads_post_drain": 8,
+    "child_pid_unchanged": true,
+    "drain_interval_s": 3.0,
+    "original_criterion_literal_result": "PASS",
+    "persistent_growth_established": false,
+    "reviewed_classification": "PASS"
+   },
+   {
+    "run": "P3_r1",
+    "parent_threads_post_readiness": 11,
+    "parent_threads_post_drain": 11,
+    "child_threads_post_readiness": 8,
+    "child_threads_post_drain": 8,
+    "child_pid_unchanged": true,
+    "drain_interval_s": 3.0,
+    "original_criterion_literal_result": "PASS",
+    "persistent_growth_established": false,
+    "reviewed_classification": "PASS"
+   },
+   {
+    "run": "P4_r1",
+    "parent_threads_post_readiness": 11,
+    "parent_threads_post_drain": 12,
+    "child_threads_post_readiness": 8,
+    "child_threads_post_drain": 8,
+    "child_pid_unchanged": true,
+    "drain_interval_s": 3.0,
+    "original_criterion_literal_result": "FAIL",
+    "persistent_growth_established": "NOT ESTABLISHED (3 s drain is shorter than the anyio idle-pruning behaviour; counts return only on a later threadpool call)",
+    "reviewed_classification": "NOT VERIFIED"
+   },
+   {
+    "run": "P4_r2",
+    "parent_threads_post_readiness": 11,
+    "parent_threads_post_drain": 13,
+    "child_threads_post_readiness": 8,
+    "child_threads_post_drain": 8,
+    "child_pid_unchanged": true,
+    "drain_interval_s": 3.0,
+    "original_criterion_literal_result": "FAIL",
+    "persistent_growth_established": "NOT ESTABLISHED (3 s drain is shorter than the anyio idle-pruning behaviour; counts return only on a later threadpool call)",
+    "reviewed_classification": "NOT VERIFIED"
+   },
+   {
+    "run": "P4_r3",
+    "parent_threads_post_readiness": 11,
+    "parent_threads_post_drain": 12,
+    "child_threads_post_readiness": 8,
+    "child_threads_post_drain": 8,
+    "child_pid_unchanged": true,
+    "drain_interval_s": 3.0,
+    "original_criterion_literal_result": "FAIL",
+    "persistent_growth_established": "NOT ESTABLISHED (3 s drain is shorter than the anyio idle-pruning behaviour; counts return only on a later threadpool call)",
+    "reviewed_classification": "NOT VERIFIED"
+   },
+   {
+    "run": "P5_r1",
+    "parent_threads_post_readiness": 11,
+    "parent_threads_post_drain": 11,
+    "child_threads_post_readiness": 8,
+    "child_threads_post_drain": 8,
+    "child_pid_unchanged": true,
+    "drain_interval_s": 3.0,
+    "original_criterion_literal_result": "PASS",
+    "persistent_growth_established": false,
+    "reviewed_classification": "PASS"
+   }
+  ],
+  "reviewed_totals": {
+   "total": 119,
+   "PASS": 104,
+   "FAIL": 5,
+   "NOT VERIFIED": 10
+  },
+  "arithmetic": "118 original - 14 substitute shutdown gates - 1 P5 combined gate + 14 per-run thread gates + 2 shutdown-leak gates = 119",
+  "overall_operational_result": "FAIL",
+  "overall_rationale": "unchanged: the P2 repetition 3 gates still fail; supplementary and diagnostic repetitions cannot replace a prescribed repetition"
+ },
+ "holdout_metadata_investigation": {
+  "inspection": "metadata only (stat, find -newerat); the file was never opened, read, hashed, copied or touched; its access time was not restored",
+  "file_metadata": {
+   "path": "data/v1/processed/test.csv",
+   "atime": "2026-11-24 16:18:34 (earlier observed value: 2026-11-20 12:32:28)",
+   "mtime": "2026-11-01 09:23:43",
+   "ctime": "2026-11-01 09:23:43",
+   "size_bytes": 3258,
+   "mtime_ctime_size_unchanged": true
+  },
+  "same_sweep_files_observed": [
+   "data/v1/processed/train.csv (16:18:33)",
+   "data/v1/raw/run_readiness_observations.csv (16:18:33)",
+   "data/v1/cleaned/run_readiness_observations.csv (16:18:34)",
+   "reports/v1/level3_errors.csv (16:18:33)",
+   "Dockerfile.level6 (16:18:31)"
+  ],
+  "other_waves_observed": [
+   "docs/*.md, README.md, reports/v1/level3_evaluation.md at 16:13:03",
+   "requirements-canonical.freeze at 16:13:08",
+   "Dockerfile.level5/level7 at 16:13:25",
+   "src/*.py (several) at 16:18:04"
+  ],
+  "own_commands_reviewed": "no command of mine named or mounted the data/ directory during the benchmark: benchmark containers mounted only tests/level8_loadgen.py and a scratch output directory; earlier repository mounts masked test.csv with an empty file; protected-file hashing uses git ls-files (tracked files only, which excludes the untracked CSVs) and none of those CSV files were in my hashing sets",
+  "assessment": "the access times show waves over many unrelated files, including raw/cleaned/processed CSVs, documentation and source, that do not match any file set my commands used at those moments; this points to a host-side bulk reader, but the process responsible was not identified. Host processes such as Spotlight, Time Machine and IDE helpers were running; their presence is not evidence that they were responsible.",
+  "holdout_non_access": "NOT VERIFIED",
+  "content_preservation": "NOT VERIFIED (mtime, ctime and size are unchanged, which shows no modification through normal file operations; content integrity was not checked because that would read the file)",
+  "contamination_note": "an access-time change by itself does not show that any model or evaluation used the file"
+ },
+ "load_generator_accounting_review": {
+  "scope": "unchanged generator, raw P2 repetition 3 records",
+  "predict": {
+   "scheduled_arrivals_total": 4000,
+   "attempted_total": 3642,
+   "missed_total_by_gap_analysis": 358,
+   "missed_total_reported_by_generator": 358,
+   "missed_in_warmup": 0,
+   "missed_in_measurement_window": 358,
+   "scheduled_in_measurement_window": 3000,
+   "attempted_in_measurement_window": 2642,
+   "completed_in_window": 2642,
+   "successful_in_window": 2642,
+   "client_timeouts": 0,
+   "connection_failures": 0,
+   "http_non_200": 0,
+   "outstanding_at_window_end": 0,
+   "success_over_attempted": 1.0,
+   "success_over_scheduled": 0.8807,
+   "reported_scheduled_in_window_field_actually_counts": "attempted arrivals (it is derived from the scheduling-lag list, which only records issued requests)"
+  },
+  "predict_latency_ms": {
+   "max": 7813.9,
+   "p95": 2053.6,
+   "count_ge_1900ms": 152,
+   "count_ge_2000ms": 144,
+   "count_ge_100ms": 606
+  },
+  "explain": {
+   "scheduled_in_measurement_window": 1200,
+   "attempted_in_window": 1176,
+   "reported_missed_total": 24,
+   "completed": 1176,
+   "successful": 931,
+   "status_counts": {
+    "200": 931,
+    "503": 244,
+    "504": 1
+   },
+   "error_codes": {
+    "explanation_overloaded": 8,
+    "explanation_deadline_exceeded": 1,
+    "explanation_unavailable": 236
+   },
+   "success_over_attempted": 0.7917,
+   "success_over_scheduled": 0.7758
+  },
+  "findings": [
+   "Prediction: 4,000 scheduled arrivals over the 40 s run, 3,642 attempted, 358 missed. All 358 misses fall in the measurement window (none in warm-up), derived independently from schedule gaps and equal to the generator's counter.",
+   "The summary field scheduled_in_window actually counts attempted requests (it is derived from the scheduling-lag list, which only contains issued requests). The true scheduled number in the window is 3,000. This is a reporting defect: success over scheduled arrivals (0.881) is not what the field implies. No measurement is wrong.",
+   "Latency percentiles are measured from just before client.post to completion, so they include connection acquisition, request transmission, response body and JSON parsing; they exclude the scheduling delay (reported separately) and the response validation, which happens after the end timestamp.",
+   "Scheduled-arrival latency covers only issued requests: missed arrivals are excluded, so it understates user-visible latency when arrivals are missed (survivorship).",
+   "The 2 s client timeout is an httpx per-phase timeout (connect, write, read, pool), not a total deadline: 144 prediction requests took 2.0 s or more and the longest took 7.8 s with zero client timeouts. The longest requests were issued while the server and the generator loop were both stalled; their latency includes waiting for pool slots (maximum in-flight predictions reached 143, above the 128-connection limit, because the backlog check counts a request only once its task starts).",
+   "Outstanding requests at window end: zero (the generator drains all tasks before summarizing).",
+   "No accounting defect changes a conclusion: the P2 repetition 3 failure and the stall are real; the missed-arrival count is correct."
+  ],
+  "defects_requiring_a_separate_source_approval": [
+   "rename or correct the scheduled_in_window summary field",
+   "count in-flight requests at task creation so the backlog bound cannot exceed the connection limit",
+   "record missed-arrival timestamps"
+  ]
+ },
+ "original_incident_reconstruction": {
+  "clock_sources": {
+   "request_times": "generator container time.monotonic (arbitrary origin), rounded to 1 microsecond; origin set to the first scheduled prediction arrival",
+   "resource_samples": "host time.time() at docker exec return, one sample every 5 s (+-~0.1 s jitter)",
+   "alignment": "generator monotonic and host epoch are aligned only through the summary's wall_epoch_end (+-~1 s); worker-pid and throttling evidence has 5 s resolution"
+  },
+  "predict_accounting": {
+   "scheduled_arrivals_total": 4000,
+   "attempted_total": 3642,
+   "missed_total_by_gap_analysis": 358,
+   "missed_total_reported_by_generator": 358,
+   "missed_in_warmup": 0,
+   "missed_in_measurement_window": 358,
+   "scheduled_in_measurement_window": 3000,
+   "attempted_in_measurement_window": 2642,
+   "completed_in_window": 2642,
+   "successful_in_window": 2642,
+   "client_timeouts": 0,
+   "connection_failures": 0,
+   "http_non_200": 0,
+   "outstanding_at_window_end": 0,
+   "success_over_attempted": 1.0,
+   "success_over_scheduled": 0.8807,
+   "reported_scheduled_in_window_field_actually_counts": "attempted arrivals (it is derived from the scheduling-lag list, which only records issued requests)"
+  },
+  "predict_latency_ms_request": {
+   "max": 7813.9,
+   "p95": 2053.6,
+   "count_ge_1900ms": 152,
+   "count_ge_2000ms": 144,
+   "count_ge_100ms": 606
+  },
+  "explain_accounting": {
+   "scheduled_in_measurement_window": 1200,
+   "attempted_in_window": 1176,
+   "reported_missed_total": 24,
+   "completed": 1176,
+   "successful": 931,
+   "status_counts": {
+    "200": 931,
+    "503": 244,
+    "504": 1
+   },
+   "error_codes": {
+    "explanation_overloaded": 8,
+    "explanation_deadline_exceeded": 1,
+    "explanation_unavailable": 236
+   },
+   "success_over_attempted": 0.7917,
+   "success_over_scheduled": 0.7758
+  },
+  "prediction_disturbance_window": {
+   "first_bucket_s": 10.5,
+   "last_bucket_s": 40.0,
+   "buckets": [
+    {
+     "t_s": 9.5,
+     "attempted": 50,
+     "missed": 0,
+     "p50_ms": 4.7,
+     "max_ms": 7.0
+    },
+    {
+     "t_s": 10.0,
+     "attempted": 50,
+     "missed": 0,
+     "p50_ms": 4.7,
+     "max_ms": 8.5
+    },
+    {
+     "t_s": 10.5,
+     "attempted": 48,
+     "missed": 0,
+     "p50_ms": 26.6,
+     "max_ms": 268.7
+    },
+    {
+     "t_s": 11.0,
+     "attempted": 52,
+     "missed": 0,
+     "p50_ms": 36.5,
+     "max_ms": 183.5
+    },
+    {
+     "t_s": 11.5,
+     "attempted": 50,
+     "missed": 0,
+     "p50_ms": 6.4,
+     "max_ms": 40.0
+    },
+    {
+     "t_s": 12.0,
+     "attempted": 50,
+     "missed": 0,
+     "p50_ms": 6.2,
+     "max_ms": 27.5
+    },
+    {
+     "t_s": 12.5,
+     "attempted": 50,
+     "missed": 0,
+     "p50_ms": 4.9,
+     "max_ms": 16.3
+    },
+    {
+     "t_s": 13.0,
+     "attempted": 50,
+     "missed": 0,
+     "p50_ms": 5.3,
+     "max_ms": 9.3
+    },
+    {
+     "t_s": 13.5,
+     "attempted": 50,
+     "missed": 0,
+     "p50_ms": 7.5,
+     "max_ms": 19.7
+    },
+    {
+     "t_s": 14.0,
+     "attempted": 50,
+     "missed": 0,
+     "p50_ms": 5.2,
+     "max_ms": 8.4
+    },
+    {
+     "t_s": 14.5,
+     "attempted": 50,
+     "missed": 0,
+     "p50_ms": 5.3,
+     "max_ms": 9.1
+    },
+    {
+     "t_s": 15.0,
+     "attempted": 50,
+     "missed": 0,
+     "p50_ms": 5.2,
+     "max_ms": 7.6
+    },
+    {
+     "t_s": 15.5,
+     "attempted": 50,
+     "missed": 0,
+     "p50_ms": 4.9,
+     "max_ms": 10.3
+    },
+    {
+     "t_s": 16.0,
+     "attempted": 50,
+     "missed": 0,
+     "p50_ms": 5.4,
+     "max_ms": 9.7
+    },
+    {
+     "t_s": 16.5,
+     "attempted": 50,
+     "missed": 0,
+     "p50_ms": 5.2,
+     "max_ms": 7.8
+    },
+    {
+     "t_s": 17.0,
+     "attempted": 50,
+     "missed": 0,
+     "p50_ms": 5.1,
+     "max_ms": 8.7
+    },
+    {
+     "t_s": 17.5,
+     "attempted": 50,
+     "missed": 0,
+     "p50_ms": 5.1,
+     "max_ms": 9.3
+    },
+    {
+     "t_s": 18.0,
+     "attempted": 50,
+     "missed": 0,
+     "p50_ms": 4.9,
+     "max_ms": 8.0
+    },
+    {
+     "t_s": 18.5,
+     "attempted": 50,
+     "missed": 0,
+     "p50_ms": 4.8,
+     "max_ms": 6.7
+    },
+    {
+     "t_s": 19.0,
+     "attempted": 50,
+     "missed": 0,
+     "p50_ms": 4.8,
+     "max_ms": 7.7
+    },
+    {
+     "t_s": 19.5,
+     "attempted": 50,
+     "missed": 0,
+     "p50_ms": 4.9,
+     "max_ms": 7.9
+    },
+    {
+     "t_s": 20.0,
+     "attempted": 50,
+     "missed": 0,
+     "p50_ms": 4.8,
+     "max_ms": 7.0
+    },
+    {
+     "t_s": 20.5,
+     "attempted": 50,
+     "missed": 0,
+     "p50_ms": 4.7,
+     "max_ms": 7.4
+    },
+    {
+     "t_s": 21.0,
+     "attempted": 50,
+     "missed": 0,
+     "p50_ms": 4.4,
+     "max_ms": 8.1
+    },
+    {
+     "t_s": 21.5,
+     "attempted": 50,
+     "missed": 0,
+     "p50_ms": 4.4,
+     "max_ms": 7.2
+    },
+    {
+     "t_s": 22.0,
+     "attempted": 50,
+     "missed": 0,
+     "p50_ms": 4.7,
+     "max_ms": 8.3
+    },
+    {
+     "t_s": 22.5,
+     "attempted": 50,
+     "missed": 0,
+     "p50_ms": 4.7,
+     "max_ms": 14.2
+    },
+    {
+     "t_s": 23.0,
+     "attempted": 50,
+     "missed": 0,
+     "p50_ms": 4.9,
+     "max_ms": 9.8
+    },
+    {
+     "t_s": 23.5,
+     "attempted": 48,
+     "missed": 0,
+     "p50_ms": 100.1,
+     "max_ms": 282.4
+    },
+    {
+     "t_s": 24.0,
+     "attempted": 52,
+     "missed": 0,
+     "p50_ms": 21.5,
+     "max_ms": 208.5
+    },
+    {
+     "t_s": 24.5,
+     "attempted": 50,
+     "missed": 0,
+     "p50_ms": 5.4,
+     "max_ms": 13.9
+    },
+    {
+     "t_s": 25.0,
+     "attempted": 50,
+     "missed": 0,
+     "p50_ms": 6.2,
+     "max_ms": 23.0
+    },
+    {
+     "t_s": 25.5,
+     "attempted": 50,
+     "missed": 0,
+     "p50_ms": 4.8,
+     "max_ms": 11.1
+    },
+    {
+     "t_s": 26.0,
+     "attempted": 50,
+     "missed": 0,
+     "p50_ms": 4.3,
+     "max_ms": 7.8
+    },
+    {
+     "t_s": 26.5,
+     "attempted": 50,
+     "missed": 0,
+     "p50_ms": 4.5,
+     "max_ms": 6.9
+    },
+    {
+     "t_s": 27.0,
+     "attempted": 50,
+     "missed": 0,
+     "p50_ms": 4.4,
+     "max_ms": 7.6
+    },
+    {
+     "t_s": 27.5,
+     "attempted": 50,
+     "missed": 0,
+     "p50_ms": 4.5,
+     "max_ms": 9.8
+    },
+    {
+     "t_s": 28.0,
+     "attempted": 50,
+     "missed": 0,
+     "p50_ms": 4.8,
+     "max_ms": 9.2
+    },
+    {
+     "t_s": 28.5,
+     "attempted": 50,
+     "missed": 0,
+     "p50_ms": 4.9,
+     "max_ms": 11.7
+    },
+    {
+     "t_s": 29.0,
+     "attempted": 50,
+     "missed": 0,
+     "p50_ms": 4.6,
+     "max_ms": 9.0
+    },
+    {
+     "t_s": 29.5,
+     "attempted": 50,
+     "missed": 0,
+     "p50_ms": 4.3,
+     "max_ms": 8.5
+    },
+    {
+     "t_s": 30.0,
+     "attempted": 50,
+     "missed": 0,
+     "p50_ms": 4.3,
+     "max_ms": 8.2
+    },
+    {
+     "t_s": 30.5,
+     "attempted": 49,
+     "missed": 0,
+     "p50_ms": 157.9,
+     "max_ms": 2803.4
+    },
+    {
+     "t_s": 31.0,
+     "attempted": 33,
+     "missed": 0,
+     "p50_ms": 504.1,
+     "max_ms": 6619.9
+    },
+    {
+     "t_s": 31.5,
+     "attempted": 50,
+     "missed": 0,
+     "p50_ms": 2039.0,
+     "max_ms": 7813.9
+    },
+    {
+     "t_s": 32.0,
+     "attempted": 10,
+     "missed": 0,
+     "p50_ms": 4512.0,
+     "max_ms": 6313.3
+    },
+    {
+     "t_s": 32.5,
+     "attempted": 70,
+     "missed": 38,
+     "p50_ms": 2258.4,
+     "max_ms": 7723.4
+    },
+    {
+     "t_s": 33.5,
+     "attempted": 14,
+     "missed": 36,
+     "p50_ms": 1026.4,
+     "max_ms": 4187.6
+    },
+    {
+     "t_s": 34.0,
+     "attempted": 18,
+     "missed": 30,
+     "p50_ms": 2247.0,
+     "max_ms": 4070.2
+    },
+    {
+     "t_s": 34.5,
+     "attempted": 24,
+     "missed": 28,
+     "p50_ms": 2226.1,
+     "max_ms": 4313.4
+    },
+    {
+     "t_s": 35.0,
+     "attempted": 8,
+     "missed": 42,
+     "p50_ms": 3093.7,
+     "max_ms": 4780.4
+    },
+    {
+     "t_s": 36.0,
+     "attempted": 46,
+     "missed": 35,
+     "p50_ms": 1718.6,
+     "max_ms": 4207.5
+    },
+    {
+     "t_s": 37.0,
+     "attempted": 38,
+     "missed": 8,
+     "p50_ms": 836.0,
+     "max_ms": 3137.4
+    },
+    {
+     "t_s": 37.5,
+     "attempted": 37,
+     "missed": 16,
+     "p50_ms": 1125.5,
+     "max_ms": 2277.1
+    },
+    {
+     "t_s": 38.0,
+     "attempted": 45,
+     "missed": 6,
+     "p50_ms": 742.0,
+     "max_ms": 2129.8
+    },
+    {
+     "t_s": 38.5,
+     "attempted": 49,
+     "missed": 0,
+     "p50_ms": 624.1,
+     "max_ms": 1770.1
+    },
+    {
+     "t_s": 39.0,
+     "attempted": 50,
+     "missed": 0,
+     "p50_ms": 465.6,
+     "max_ms": 1183.1
+    },
+    {
+     "t_s": 39.5,
+     "attempted": 50,
+     "missed": 0,
+     "p50_ms": 285.7,
+     "max_ms": 819.2
+    },
+    {
+     "t_s": 40.0,
+     "attempted": 1,
+     "missed": 0,
+     "p50_ms": 52.5,
+     "max_ms": 52.5
+    }
+   ]
+  },
+  "explanation_failure_sequence": {
+   "first_non_200_request": {
+    "status": 503,
+    "code": "explanation_overloaded",
+    "start_s": 11.253,
+    "end_s": 11.272,
+    "duration_ms": 19.2
+   },
+   "non_200_first_bucket_s": 11.0,
+   "non_200_last_bucket_s": 39.5,
+   "unavailable_requests": 236,
+   "last_unavailable_end_s": 38.911,
+   "first_200_after_failures_start_s": 11.302,
+   "timeline_around_failure": [
+    {
+     "t_s": 10.0,
+     "status_counts": {
+      "200": 20
+     },
+     "max_ms": 33.4
+    },
+    {
+     "t_s": 10.5,
+     "status_counts": {
+      "200": 19
+     },
+     "max_ms": 442.4
+    },
+    {
+     "t_s": 11.0,
+     "status_counts": {
+      "200": 19,
+      "503": 2
+     },
+     "max_ms": 337.2
+    },
+    {
+     "t_s": 11.5,
+     "status_counts": {
+      "503": 2,
+      "200": 18
+     },
+     "max_ms": 237.9
+    },
+    {
+     "t_s": 12.0,
+     "status_counts": {
+      "200": 20
+     },
+     "max_ms": 190.3
+    },
+    {
+     "t_s": 12.5,
+     "status_counts": {
+      "200": 20
+     },
+     "max_ms": 85.6
+    },
+    {
+     "t_s": 13.0,
+     "status_counts": {
+      "200": 20
+     },
+     "max_ms": 33.8
+    },
+    {
+     "t_s": 13.5,
+     "status_counts": {
+      "200": 20
+     },
+     "max_ms": 133.6
+    },
+    {
+     "t_s": 14.0,
+     "status_counts": {
+      "200": 20
+     },
+     "max_ms": 75.6
+    },
+    {
+     "t_s": 14.5,
+     "status_counts": {
+      "200": 20
+     },
+     "max_ms": 33.1
+    },
+    {
+     "t_s": 15.0,
+     "status_counts": {
+      "200": 20
+     },
+     "max_ms": 34.1
+    },
+    {
+     "t_s": 15.5,
+     "status_counts": {
+      "200": 20
+     },
+     "max_ms": 31.0
+    },
+    {
+     "t_s": 16.0,
+     "status_counts": {
+      "200": 20
+     },
+     "max_ms": 30.8
+    },
+    {
+     "t_s": 16.5,
+     "status_counts": {
+      "200": 20
+     },
+     "max_ms": 33.6
+    },
+    {
+     "t_s": 17.0,
+     "status_counts": {
+      "200": 20
+     },
+     "max_ms": 31.2
+    },
+    {
+     "t_s": 17.5,
+     "status_counts": {
+      "200": 20
+     },
+     "max_ms": 31.6
+    },
+    {
+     "t_s": 18.0,
+     "status_counts": {
+      "200": 20
+     },
+     "max_ms": 31.6
+    },
+    {
+     "t_s": 18.5,
+     "status_counts": {
+      "200": 20
+     },
+     "max_ms": 27.9
+    },
+    {
+     "t_s": 19.0,
+     "status_counts": {
+      "200": 20
+     },
+     "max_ms": 30.2
+    },
+    {
+     "t_s": 19.5,
+     "status_counts": {
+      "200": 20
+     },
+     "max_ms": 26.6
+    },
+    {
+     "t_s": 20.0,
+     "status_counts": {
+      "200": 20
+     },
+     "max_ms": 28.8
+    },
+    {
+     "t_s": 20.5,
+     "status_counts": {
+      "200": 20
+     },
+     "max_ms": 27.8
+    },
+    {
+     "t_s": 21.0,
+     "status_counts": {
+      "200": 20
+     },
+     "max_ms": 29.2
+    },
+    {
+     "t_s": 21.5,
+     "status_counts": {
+      "200": 20
+     },
+     "max_ms": 30.1
+    },
+    {
+     "t_s": 22.0,
+     "status_counts": {
+      "200": 20
+     },
+     "max_ms": 32.7
+    },
+    {
+     "t_s": 22.5,
+     "status_counts": {
+      "200": 20
+     },
+     "max_ms": 41.4
+    },
+    {
+     "t_s": 23.0,
+     "status_counts": {
+      "200": 20
+     },
+     "max_ms": 36.3
+    },
+    {
+     "t_s": 23.5,
+     "status_counts": {
+      "200": 20
+     },
+     "max_ms": 305.4
+    },
+    {
+     "t_s": 24.0,
+     "status_counts": {
+      "200": 20
+     },
+     "max_ms": 314.6
+    },
+    {
+     "t_s": 24.5,
+     "status_counts": {
+      "200": 20
+     },
+     "max_ms": 83.8
+    },
+    {
+     "t_s": 25.0,
+     "status_counts": {
+      "200": 20
+     },
+     "max_ms": 125.5
+    },
+    {
+     "t_s": 25.5,
+     "status_counts": {
+      "200": 20
+     },
+     "max_ms": 127.7
+    },
+    {
+     "t_s": 26.0,
+     "status_counts": {
+      "200": 20
+     },
+     "max_ms": 29.9
+    },
+    {
+     "t_s": 26.5,
+     "status_counts": {
+      "200": 20
+     },
+     "max_ms": 27.3
+    },
+    {
+     "t_s": 27.0,
+     "status_counts": {
+      "200": 20
+     },
+     "max_ms": 27.1
+    },
+    {
+     "t_s": 27.5,
+     "status_counts": {
+      "200": 20
+     },
+     "max_ms": 28.7
+    },
+    {
+     "t_s": 28.0,
+     "status_counts": {
+      "200": 20
+     },
+     "max_ms": 27.2
+    },
+    {
+     "t_s": 28.5,
+     "status_counts": {
+      "200": 20
+     },
+     "max_ms": 35.0
+    },
+    {
+     "t_s": 29.0,
+     "status_counts": {
+      "200": 20
+     },
+     "max_ms": 27.5
+    },
+    {
+     "t_s": 29.5,
+     "status_counts": {
+      "200": 20
+     },
+     "max_ms": 28.3
+    },
+    {
+     "t_s": 30.0,
+     "status_counts": {
+      "200": 20
+     },
+     "max_ms": 27.1
+    },
+    {
+     "t_s": 30.5,
+     "status_counts": {
+      "200": 20
+     },
+     "max_ms": 892.4
+    },
+    {
+     "t_s": 31.0,
+     "status_counts": {
+      "200": 8,
+      "503": 8
+     },
+     "max_ms": 5682.1
+    },
+    {
+     "t_s": 31.5,
+     "status_counts": {
+      "200": 2,
+      "504": 1,
+      "503": 11
+     },
+     "max_ms": 7546.7
+    },
+    {
+     "t_s": 32.0,
+     "status_counts": {
+      "503": 7,
+      "200": 1
+     },
+     "max_ms": 7073.4
+    },
+    {
+     "t_s": 32.5,
+     "status_counts": {
+      "503": 39,
+      "200": 1
+     },
+     "max_ms": 6156.5
+    },
+    {
+     "t_s": 33.0,
+     "status_counts": {
+      "503": 22
+     },
+     "max_ms": 5349.3
+    },
+    {
+     "t_s": 33.5,
+     "status_counts": {
+      "503": 18
+     },
+     "max_ms": 4745.6
+    },
+    {
+     "t_s": 34.0,
+     "status_counts": {
+      "503": 20,
+      "200": 1
+     },
+     "max_ms": 5062.7
+    },
+    {
+     "t_s": 34.5,
+     "status_counts": {
+      "503": 17,
+      "200": 2
+     },
+     "max_ms": 4918.2
+    },
+    {
+     "t_s": 35.0,
+     "status_counts": {
+      "503": 16,
+      "200": 1
+     },
+     "max_ms": 4933.7
+    },
+    {
+     "t_s": 35.5,
+     "status_counts": {
+      "503": 5,
+      "200": 1
+     },
+     "max_ms": 3385.0
+    },
+    {
+     "t_s": 36.0,
+     "status_counts": {
+      "503": 20,
+      "200": 3
+     },
+     "max_ms": 4361.2
+    },
+    {
+     "t_s": 36.5,
+     "status_counts": {
+      "503": 10,
+      "200": 1
+     },
+     "max_ms": 2160.1
+    },
+    {
+     "t_s": 37.0,
+     "status_counts": {
+      "503": 17,
+      "200": 4
+     },
+     "max_ms": 3320.4
+    },
+    {
+     "t_s": 37.5,
+     "status_counts": {
+      "503": 13,
+      "200": 7
+     },
+     "max_ms": 1916.2
+    },
+    {
+     "t_s": 38.0,
+     "status_counts": {
+      "503": 11,
+      "200": 9
+     },
+     "max_ms": 1798.8
+    },
+    {
+     "t_s": 38.5,
+     "status_counts": {
+      "503": 3,
+      "200": 17
+     },
+     "max_ms": 1665.9
+    },
+    {
+     "t_s": 39.0,
+     "status_counts": {
+      "200": 18,
+      "503": 2
+     },
+     "max_ms": 1379.1
+    },
+    {
+     "t_s": 39.5,
+     "status_counts": {
+      "200": 19,
+      "503": 1
+     },
+     "max_ms": 854.3
+    }
+   ]
+  },
+  "resource_samples_vs_request_clock": [
+   {
+    "t_request_clock_s": 4.1,
+    "nr_throttled": 4,
+    "throttled_ms_cum": 1210,
+    "usage_s_cum": 11.35,
+    "mem_mib": 387.6,
+    "child_pid": 17,
+    "parent_threads": 16
+   },
+   {
+    "t_request_clock_s": 9.25,
+    "nr_throttled": 4,
+    "throttled_ms_cum": 1210,
+    "usage_s_cum": 16.65,
+    "mem_mib": 387.7,
+    "child_pid": 17,
+    "parent_threads": 16
+   },
+   {
+    "t_request_clock_s": 14.43,
+    "nr_throttled": 4,
+    "throttled_ms_cum": 1210,
+    "usage_s_cum": 23.13,
+    "mem_mib": 387.8,
+    "child_pid": 17,
+    "parent_threads": 15
+   },
+   {
+    "t_request_clock_s": 19.59,
+    "nr_throttled": 4,
+    "throttled_ms_cum": 1210,
+    "usage_s_cum": 28.43,
+    "mem_mib": 388.2,
+    "child_pid": 17,
+    "parent_threads": 15
+   },
+   {
+    "t_request_clock_s": 24.77,
+    "nr_throttled": 4,
+    "throttled_ms_cum": 1210,
+    "usage_s_cum": 34.04,
+    "mem_mib": 387.9,
+    "child_pid": 17,
+    "parent_threads": 18
+   },
+   {
+    "t_request_clock_s": 29.93,
+    "nr_throttled": 4,
+    "throttled_ms_cum": 1210,
+    "usage_s_cum": 39.2,
+    "mem_mib": 387.7,
+    "child_pid": 17,
+    "parent_threads": 18
+   },
+   {
+    "t_request_clock_s": 35.55,
+    "nr_throttled": 6,
+    "throttled_ms_cum": 1899,
+    "usage_s_cum": 47.08,
+    "mem_mib": 305.4,
+    "child_pid": 267,
+    "parent_threads": 17
+   },
+   {
+    "t_request_clock_s": 40.75,
+    "nr_throttled": 6,
+    "throttled_ms_cum": 1899,
+    "usage_s_cum": 54.03,
+    "mem_mib": 388.1,
+    "child_pid": 267,
+    "parent_threads": 17
+   }
+  ],
+  "worker_pid_transition": "child pid 17 until the sample at ~31 s after readiness sampling start, 267 at the next sample (5 s resolution); the exact replacement instant is not recorded",
+  "causal_note": "Sequence is observed; the trigger of the first execution-deadline event is not recorded (no dispatcher log or counter in this unmodified run).",
+  "host_activity_correlation": {
+   "observation": "The P2 repetition 3 stall (explanation throughput falling from about 30 s into the run, prediction completions collapsing at about 30.5 s) occurred between 16:13:11 and 16:13:21 local time. Files across the repository received access times between 16:13:03 and 16:13:25 (documentation, requirements, Dockerfiles). The generator's own event loop showed a 561 ms lag at only 0.55 of its 2 cores, and the soak run's largest scheduling lag (165 ms) occurred at 16:18:01.6, shortly before the 16:18:04 source-file wave.",
+   "status": "CORRELATION ONLY. A host-level disturbance as a common cause of the server and generator stalls is consistent with this and not proven; no host log was available."
+  }
+ },
+ "controlled_recovery_interference": {
+  "RECOVERY_1": {
+   "status": "OBSERVED",
+   "worker_killed": {
+    "old_pid": 17,
+    "kill_epoch_offset_into_run_s": 21.04
+   },
+   "timings_s": {
+    "kill_to_failure_observed_in_trace": 0.09,
+    "failure_to_replacement_state_starting": 0.0,
+    "kill_to_replacement_ready": 2.7,
+    "explanation_unavailable_duration": 2.61,
+    "trace_resolution_s": 0.1
+   },
+   "dispatcher": {
+    "generation_after": 2,
+    "restarts_total_after": 1,
+    "failures": {
+     "failure:idle_eof": 1
+    }
+   },
+   "prediction_event_windows": {
+    "pre_5s": {
+     "window_s": 5.0,
+     "attempted": 501,
+     "missed_arrivals": 0,
+     "successful": 501,
+     "p50_ms": 7.208,
+     "p95_ms": 10.428,
+     "max_ms": 14.578
+    },
+    "during_recovery": {
+     "window_s": 2.7,
+     "attempted": 269,
+     "missed_arrivals": 0,
+     "successful": 269,
+     "p50_ms": 4.207,
+     "p95_ms": 9.694,
+     "max_ms": 70.143
+    },
+    "post_5s": {
+     "window_s": 5.0,
+     "attempted": 500,
+     "missed_arrivals": 0,
+     "successful": 500,
+     "p50_ms": 7.288,
+     "p95_ms": 10.952,
+     "max_ms": 15.602
+    }
+   },
+   "no_fault_baseline_same_offsets": {
+    "pre": {
+     "window_s": 5.0,
+     "attempted": 500,
+     "missed_arrivals": 0,
+     "successful": 500,
+     "p50_ms": 7.175,
+     "p95_ms": 10.161,
+     "max_ms": 14.72
+    },
+    "during": {
+     "window_s": 2.7,
+     "attempted": 269,
+     "missed_arrivals": 0,
+     "successful": 269,
+     "p50_ms": 7.082,
+     "p95_ms": 9.974,
+     "max_ms": 11.567
+    },
+    "post": {
+     "window_s": 5.0,
+     "attempted": 500,
+     "missed_arrivals": 0,
+     "successful": 500,
+     "p50_ms": 6.92,
+     "p95_ms": 10.104,
+     "max_ms": 15.15
+    }
+   },
+   "prediction_full_run": {
+    "completed": 3000,
+    "successful": 3000,
+    "success_fraction": 1.0,
+    "status_counts": {
+     "200": 3000
+    },
+    "latency_request_successful": {
+     "n": 3000,
+     "p50_ms": 6.994,
+     "p95_ms": 10.755,
+     "p99_ms": 13.054,
+     "max_ms": 70.144,
+     "mean_ms": 7.357
+    },
+    "open_loop": {
+     "scheduled_rate_per_s": 100.0,
+     "scheduled_in_window": 3000,
+     "missed_arrivals_total": 0,
+     "attempted_in_window": 3000,
+     "scheduling_lag_ms": {
+      "p50": 1.427,
+      "p99": 2.862,
+      "max": 11.409
+     }
+    }
+   },
+   "cpu_during_recovery": {
+    "interval_s": 2.61,
+    "container_cpu_cores": 1.511,
+    "nr_throttled_added": 2,
+    "throttled_ms_added": 414.9,
+    "parent_cpu_cores": 0.237,
+    "child_cpu_cores_if_same_pid": null
+   },
+   "cpu_before_kill": {
+    "interval_s": 4.95,
+    "container_cpu_cores": 0.414,
+    "nr_throttled_added": 0,
+    "throttled_ms_added": 0.0,
+    "parent_cpu_cores": 0.387,
+    "child_cpu_cores_if_same_pid": 0.0
+   },
+   "server_event_loop_lag_during_recovery": {
+    "samples": 36,
+    "p99_ms": 3.37,
+    "max_ms": 4.0
+   },
+   "server_event_loop_lag_elsewhere": {
+    "samples": 458,
+    "p99_ms": 3.772,
+    "max_ms": 9.2
+   },
+   "generator": {
+    "cpu_cores_used": 0.417,
+    "event_loop_lag_ms": {
+     "p99": 2.981,
+     "max": 25.02
+    }
+   },
+   "post_recovery_explanation": {
+    "rc": 0,
+    "out": "{\"health_epoch\": 1795556459.3370907, \"explanation_epoch\": 1795556459.360588}",
+    "epoch": 1795556459.538037
+   },
+   "cleanup": {
+    "exit_code_oom_killed": "0 false",
+    "traceback_in_log": false
+   }
+  },
+  "RECOVERY_2": {
+   "status": "OBSERVED",
+   "worker_killed": {
+    "old_pid": 17,
+    "kill_epoch_offset_into_run_s": 21.06
+   },
+   "timings_s": {
+    "kill_to_failure_observed_in_trace": 0.07,
+    "failure_to_replacement_state_starting": 0.0,
+    "kill_to_replacement_ready": 2.58,
+    "explanation_unavailable_duration": 2.51,
+    "trace_resolution_s": 0.1
+   },
+   "dispatcher": {
+    "generation_after": 2,
+    "restarts_total_after": 1,
+    "failures": {
+     "failure:idle_eof": 1
+    }
+   },
+   "prediction_event_windows": {
+    "pre_5s": {
+     "window_s": 5.0,
+     "attempted": 500,
+     "missed_arrivals": 0,
+     "successful": 500,
+     "p50_ms": 7.257,
+     "p95_ms": 12.29,
+     "max_ms": 15.151
+    },
+    "during_recovery": {
+     "window_s": 2.58,
+     "attempted": 258,
+     "missed_arrivals": 0,
+     "successful": 258,
+     "p50_ms": 4.153,
+     "p95_ms": 22.708,
+     "max_ms": 86.539
+    },
+    "post_5s": {
+     "window_s": 5.0,
+     "attempted": 500,
+     "missed_arrivals": 0,
+     "successful": 500,
+     "p50_ms": 6.948,
+     "p95_ms": 8.832,
+     "max_ms": 11.776
+    }
+   },
+   "no_fault_baseline_same_offsets": {
+    "pre": {
+     "window_s": 5.0,
+     "attempted": 500,
+     "missed_arrivals": 0,
+     "successful": 500,
+     "p50_ms": 7.194,
+     "p95_ms": 10.161,
+     "max_ms": 14.72
+    },
+    "during": {
+     "window_s": 2.58,
+     "attempted": 258,
+     "missed_arrivals": 0,
+     "successful": 258,
+     "p50_ms": 7.075,
+     "p95_ms": 9.994,
+     "max_ms": 11.567
+    },
+    "post": {
+     "window_s": 5.0,
+     "attempted": 500,
+     "missed_arrivals": 0,
+     "successful": 500,
+     "p50_ms": 6.971,
+     "p95_ms": 10.088,
+     "max_ms": 15.15
+    }
+   },
+   "prediction_full_run": {
+    "completed": 3000,
+    "successful": 3000,
+    "success_fraction": 1.0,
+    "status_counts": {
+     "200": 3000
+    },
+    "latency_request_successful": {
+     "n": 3000,
+     "p50_ms": 7.055,
+     "p95_ms": 11.491,
+     "p99_ms": 14.708,
+     "max_ms": 86.539,
+     "mean_ms": 7.296
+    },
+    "open_loop": {
+     "scheduled_rate_per_s": 100.0,
+     "scheduled_in_window": 3000,
+     "missed_arrivals_total": 0,
+     "attempted_in_window": 3000,
+     "scheduling_lag_ms": {
+      "p50": 1.288,
+      "p99": 2.784,
+      "max": 7.692
+     }
+    }
+   },
+   "cpu_during_recovery": {
+    "interval_s": 2.51,
+    "container_cpu_cores": 1.537,
+    "nr_throttled_added": 2,
+    "throttled_ms_added": 686.6,
+    "parent_cpu_cores": 0.235,
+    "child_cpu_cores_if_same_pid": null
+   },
+   "cpu_before_kill": {
+    "interval_s": 4.96,
+    "container_cpu_cores": 0.419,
+    "nr_throttled_added": 0,
+    "throttled_ms_added": 0.0,
+    "parent_cpu_cores": 0.391,
+    "child_cpu_cores_if_same_pid": 0.002
+   },
+   "server_event_loop_lag_during_recovery": {
+    "samples": 35,
+    "p99_ms": 2.698,
+    "max_ms": 2.8
+   },
+   "server_event_loop_lag_elsewhere": {
+    "samples": 458,
+    "p99_ms": 4.043,
+    "max_ms": 27.3
+   },
+   "generator": {
+    "cpu_cores_used": 0.401,
+    "event_loop_lag_ms": {
+     "p99": 3.23,
+     "max": 16.618
+    }
+   },
+   "post_recovery_explanation": {
+    "rc": 0,
+    "out": "{\"health_epoch\": 1795556513.9520519, \"explanation_epoch\": 1795556513.9717498}",
+    "epoch": 1795556514.178012
+   },
+   "cleanup": {
+    "exit_code_oom_killed": "0 false",
+    "traceback_in_log": false
+   }
+  }
+ },
+ "supplementary_diagnostic_repetitions": {
+  "p2_reproduction": {
+   "P2_DIAG_1": {
+    "status": "NOT REPRODUCED",
+    "prediction": {
+     "completed": 3000,
+     "successful": 3000,
+     "status_counts": {
+      "200": 3000
+     },
+     "latency_request_successful": {
+      "n": 3000,
+      "p50_ms": 4.626,
+      "p95_ms": 9.906,
+      "p99_ms": 12.577,
+      "max_ms": 18.748,
+      "mean_ms": 5.428
+     },
+     "open_loop": {
+      "scheduled_rate_per_s": 100.0,
+      "scheduled_in_window": 3000,
+      "missed_arrivals_total": 0,
+      "attempted_in_window": 3000,
+      "scheduling_lag_ms": {
+       "p50": 1.055,
+       "p99": 2.606,
+       "max": 5.83
+      }
+     }
+    },
+    "explanation": {
+     "completed": 1200,
+     "successful": 1200,
+     "status_counts": {
+      "200": 1200
+     },
+     "latency_request_successful": {
+      "n": 1200,
+      "p50_ms": 27.687,
+      "p95_ms": 32.763,
+      "p99_ms": 35.445,
+      "max_ms": 44.619,
+      "mean_ms": 26.105
+     },
+     "throughput_successful_per_s": 40.0
+    },
+    "dispatcher_restarts_observed": 0,
+    "failure_counters": {},
+    "max_active_queued": {
+     "active": 1,
+     "queued": 1
+    },
+    "server_event_loop_lag": {
+     "samples": 488,
+     "p99_ms": 3.726,
+     "max_ms": 42.4
+    },
+    "cpu_whole_run": {
+     "interval_s": 49.1,
+     "container_cpu_cores": 1.007,
+     "nr_throttled_added": 2,
+     "throttled_ms_added": 757.8,
+     "parent_cpu_cores": 0.297,
+     "child_cpu_cores_if_same_pid": null
+    },
+    "generator": {
+     "cpu_cores_used": 0.39,
+     "event_loop_lag_ms": {
+      "p99": 2.401,
+      "max": 23.706
+     }
+    },
+    "startup": {
+     "health_s": 3.14,
+     "first_explanation_s": 6.05
+    },
+    "exit_code_oom_killed": "0 false",
+    "traceback_in_log": false
+   },
+   "P2_DIAG_2": {
+    "status": "NOT REPRODUCED",
+    "prediction": {
+     "completed": 3000,
+     "successful": 3000,
+     "status_counts": {
+      "200": 3000
+     },
+     "latency_request_successful": {
+      "n": 3000,
+      "p50_ms": 4.609,
+      "p95_ms": 6.469,
+      "p99_ms": 7.623,
+      "max_ms": 15.346,
+      "mean_ms": 4.774
+     },
+     "open_loop": {
+      "scheduled_rate_per_s": 100.0,
+      "scheduled_in_window": 3000,
+      "missed_arrivals_total": 0,
+      "attempted_in_window": 3000,
+      "scheduling_lag_ms": {
+       "p50": 1.547,
+       "p99": 2.374,
+       "max": 3.821
+      }
+     }
+    },
+    "explanation": {
+     "completed": 1200,
+     "successful": 1200,
+     "status_counts": {
+      "200": 1200
+     },
+     "latency_request_successful": {
+      "n": 1200,
+      "p50_ms": 21.932,
+      "p95_ms": 28.916,
+      "p99_ms": 37.926,
+      "max_ms": 51.464,
+      "mean_ms": 23.254
+     },
+     "throughput_successful_per_s": 40.0
+    },
+    "dispatcher_restarts_observed": 0,
+    "failure_counters": {},
+    "max_active_queued": {
+     "active": 1,
+     "queued": 1
+    },
+    "server_event_loop_lag": {
+     "samples": 488,
+     "p99_ms": 3.2,
+     "max_ms": 55.6
+    },
+    "cpu_whole_run": {
+     "interval_s": 49.01,
+     "container_cpu_cores": 0.949,
+     "nr_throttled_added": 2,
+     "throttled_ms_added": 778.0,
+     "parent_cpu_cores": 0.262,
+     "child_cpu_cores_if_same_pid": null
+    },
+    "generator": {
+     "cpu_cores_used": 0.344,
+     "event_loop_lag_ms": {
+      "p99": 1.958,
+      "max": 17.841
+     }
+    },
+    "startup": {
+     "health_s": 3.05,
+     "first_explanation_s": 5.95
+    },
+    "exit_code_oom_killed": "0 false",
+    "traceback_in_log": false
+   },
+   "P2_DIAG_3": {
+    "status": "NOT REPRODUCED",
+    "prediction": {
+     "completed": 3000,
+     "successful": 3000,
+     "status_counts": {
+      "200": 3000
+     },
+     "latency_request_successful": {
+      "n": 3000,
+      "p50_ms": 4.664,
+      "p95_ms": 7.8,
+      "p99_ms": 10.97,
+      "max_ms": 17.566,
+      "mean_ms": 5.077
+     },
+     "open_loop": {
+      "scheduled_rate_per_s": 100.0,
+      "scheduled_in_window": 3000,
+      "missed_arrivals_total": 0,
+      "attempted_in_window": 3000,
+      "scheduling_lag_ms": {
+       "p50": 1.151,
+       "p99": 2.931,
+       "max": 4.002
+      }
+     }
+    },
+    "explanation": {
+     "completed": 1200,
+     "successful": 1200,
+     "status_counts": {
+      "200": 1200
+     },
+     "latency_request_successful": {
+      "n": 1200,
+      "p50_ms": 22.973,
+      "p95_ms": 29.777,
+      "p99_ms": 34.482,
+      "max_ms": 43.348,
+      "mean_ms": 23.706
+     },
+     "throughput_successful_per_s": 40.0
+    },
+    "dispatcher_restarts_observed": 0,
+    "failure_counters": {},
+    "max_active_queued": {
+     "active": 1,
+     "queued": 1
+    },
+    "server_event_loop_lag": {
+     "samples": 483,
+     "p99_ms": 3.236,
+     "max_ms": 42.0
+    },
+    "cpu_whole_run": {
+     "interval_s": 48.61,
+     "container_cpu_cores": 0.92,
+     "nr_throttled_added": 2,
+     "throttled_ms_added": 714.6,
+     "parent_cpu_cores": 0.281,
+     "child_cpu_cores_if_same_pid": null
+    },
+    "generator": {
+     "cpu_cores_used": 0.361,
+     "event_loop_lag_ms": {
+      "p99": 2.263,
+      "max": 16.469
+     }
+    },
+    "startup": {
+     "health_s": 2.93,
+     "first_explanation_s": 5.51
+    },
+    "exit_code_oom_killed": "0 false",
+    "traceback_in_log": false
+   }
+  },
+  "note": "instrumented with an in-process 100 ms sampler; not equivalent to the unmodified application measurements; the original failed repetition is preserved above"
+ },
+ "thread_retention_investigation": {
+  "preregistration": {
+   "code_inspected": "installed anyio 4.16.0 asyncio backend: worker threads are returned to an idle list after each call; MAX_IDLE_TIME = 10 s; expired idle workers are pruned LAZILY, only when a later run_sync_in_worker_thread call occurs (no timer); default capacity limiter = 40 threads. Level 7 /predict and /health are sync handlers, so they use this pool.",
+   "expected_behavior": [
+    "during an idle drain the parent thread count stays constant (retained idle workers, no timer-based retirement)",
+    "the first threadpool call after >=10 s idle prunes workers idle >=10 s, so the parent thread count falls to near baseline",
+    "the pool never exceeds 40 workers"
+   ],
+   "drain_interval_s": 15,
+   "poke": "one GET /health (sync handler) after the drain",
+   "sampling": "in-process probe every 100 ms for thread counts; docker exec cgroup/proc sample every 5 s",
+   "criteria": [
+    "C1 parent threads constant (+-0) throughout the 15 s idle drain",
+    "C2 after the poke parent threads <= post-readiness baseline + 2 within 2 s",
+    "C3 second load cycle's peak parent threads <= first cycle's peak + 2 (no cumulative growth)",
+    "C4 child threads constant and parent+child fds return to the post-readiness baseline",
+    "C5 parent threads never exceed baseline + 40"
+   ],
+   "classification_rule": "all of C1-C5 hold -> expected bounded retention, no leak; C1 holds but C2 or C3 fails -> unexpected retention, investigate; C5 or C4 fails -> possible leak"
+  },
+  "observations": {
+   "baseline_parent_threads_after_readiness": 11,
+   "cycle_A_peak_parent_threads": 12,
+   "idle_drain_parent_thread_values": [
+    12
+   ],
+   "idle_drain_interval_s": 16.4,
+   "after_poke_parent_thread_values_2s": [
+    11
+   ],
+   "cycle_B_peak_parent_threads": 12,
+   "child_thread_counts_seen": [
+    8
+   ],
+   "post_readiness_fds": {
+    "parent": 14,
+    "child": 9
+   },
+   "post_drain_fds": {
+    "parent": 14,
+    "child": 9
+   },
+   "docker_samples_pre_poke_parent_threads": 12,
+   "docker_samples_post_poke_parent_threads": 11
+  },
+  "criteria_results": {
+   "C1_constant_during_idle_drain": true,
+   "C2_falls_to_baseline_plus_2_after_poke": true,
+   "C3_second_cycle_peak_not_higher": true,
+   "C4_child_threads_and_fds_stable": true,
+   "C5_within_pool_bound": true
+  },
+  "classification": "expected bounded retention of idle request-pool workers (lazy anyio pruning); no leak"
+ },
+ "recommended_next_steps": [
+  "Estimate the anomaly's incidence: repeat P2 (or P1/P2 alternately) 10 or more times with the probe wrapper and add host-side CPU/disk sampling that needs no privileges, to test the host-disturbance hypothesis.",
+  "Separately test a worker replacement while 40 explanations/s and 100 predictions/s are running (the case the controlled test did not cover).",
+  "With separate approval: add a dispatcher-level info log or counter for execution timeouts and worker replacements so future unmodified runs record the trigger.",
+  "With separate approval: correct the load generator's scheduled_in_window field, count in-flight requests at task creation, and record missed-arrival timestamps.",
+  "Ask the host owner to check which local process reads repository files in periodic waves, and consider excluding the consumed holdout directory from such tools."
+ ],
+ "investigation_environment": {
+  "recreated_from": "original running-readiness-level7:4.0.0 + the ten hash-locked Level 8 wheels + the committed F1 Level 7 service and committed Level 8 modules (same flat construction as L8-2D); scratch wrapper adds the probe sampler and two read-only routes",
+  "unchanged": [
+   "server 4-CPU quota and 1 GiB memory",
+   "generator 2 CPUs and 512 MiB",
+   "Torch and dispatcher settings",
+   "generator connection limits and 2 s timeout",
+   "50-input deterministic workload",
+   "python -m uvicorn, one worker, no reload",
+   "isolated internal Docker network, no published ports"
+  ],
+  "changed_for_diagnosis": [
+   "server log level info (the original runs used warning)",
+   "in-process 100 ms probe sampler and read-only /__probe routes",
+   "docker exec cgroup/proc sampling every 5 s (same as before)"
+  ],
+  "monitoring_overhead": {
+   "method": "compare the unmodified L8-2D P0 request p95 with the probe-instrumented no-fault P0 baseline",
+   "unmodified_P0_request_p95_ms": [
+    7.984,
+    10.066,
+    9.953
+   ],
+   "instrumented_no_fault_P0_request_p95_ms": 10.064,
+   "reading": "within the spread of the unmodified repetitions; overhead is not separable from run-to-run noise at this resolution",
+   "equivalence_claim": "instrumented results are not claimed to be equivalent to unmodified measurements"
+  },
+  "runs_executed": [
+   "NOFAULT_BASELINE (two load cycles + idle drain + poke)",
+   "RECOVERY_1",
+   "RECOVERY_2",
+   "P2_DIAG_1",
+   "P2_DIAG_2",
+   "P2_DIAG_3"
+  ],
+  "resource_cleanup": "all containers, the benchmark network and disposable images removed after the runs"
+ },
+ "thread_pool_implementation_inspection": "installed anyio 4.16.0 asyncio backend: worker threads are returned to an idle list after each call; MAX_IDLE_TIME = 10 s; expired idle workers are pruned LAZILY, only when a later run_sync_in_worker_thread call occurs (no timer); default capacity limiter = 40 threads. Level 7 /predict and /health are sync handlers, so they use this pool.",
+ "confirmed_findings": [
+  "The original L8-2D result is FAIL and remains FAIL. All five failures belong to P2 repetition 3; every other primary run met its gates as originally reported.",
+  "Gate reconciliation: the L8-2D thread and shutdown criteria had been replaced after measurement. Under the reviewed accounting (119 gates) 104 pass, 5 fail and 10 are NOT VERIFIED; no gate that originally failed now passes.",
+  "Prediction accounting for P2 repetition 3 is internally consistent: 4,000 scheduled, 3,642 attempted, 358 missed, all in the measurement window; every attempted prediction returned 200. The scheduled_in_window summary field actually counts attempted requests.",
+  "The 2 s client timeout is per-phase, not a total deadline; 144 predictions took at least 2.0 s (longest 7.8 s) without a client timeout.",
+  "The original stall: explanation throughput fell from about 30 s into the run, prediction completions collapsed for about 5.5 s from 30.5 s, the first 504 came at about 32 s, explanations were unavailable from about 33 s to 38.9 s, and traffic recovered by about 39-40 s. An earlier, smaller blip (a few overloaded responses and one 442 ms bucket) occurred at about 11 s.",
+  "Controlled recovery (two repetitions): after SIGKILL of only the worker, the dispatcher noticed within 0.1 s and the replacement was ready after 2.6-2.7 s, explanations were unavailable for about 2.5 s, a subsequent explanation succeeded, and cleanup was clean. Prediction stayed 100% successful with no missed arrivals; event-window p95 was 9.7 ms and 22.7 ms (no-fault baseline at the same offsets: about 10 ms) and the largest single latency was 70 ms and 87 ms. Container CPU rose to about 1.5 cores with two throttle periods (415 ms and 687 ms throttled), without a stall comparable to the original 2-7 s.",
+  "Three targeted P2 reproductions did not reproduce the anomaly (NOT REPRODUCED): no restart, no non-200 explanation, no missed arrival, prediction p95 6.5-9.9 ms, explanation p95 28.9-32.8 ms.",
+  "Thread retention behaves as the installed anyio implementation predicts: idle request-pool workers are retained and pruned lazily on the next pool call. In the pre-registered test parent threads stayed constant during a 16.4 s idle drain, fell to baseline within 2 s of one /health call, and a second load cycle peaked at the same count; child threads and file descriptors were stable. No leak was found."
+ ],
+ "unresolved_hypotheses": [
+  "Trigger of the original execution-deadline event: not established; no dispatcher counter or log existed in the unmodified run.",
+  "Host-level disturbance as a common cause of the server and generator stalls: consistent with the timing (host file-access waves at 16:13:03-16:13:25 overlap the stall at 16:13:11-16:13:21; the generator loop itself lagged 561 ms at low CPU) but correlation only; no host log was available.",
+  "Worker-replacement CPU contention as the cause of the 2 s prediction stall: NOT supported by the isolated recovery tests (prediction was nearly unaffected) although the mixed-load case (replacement during 40 explanations/s) was not tested.",
+  "Holdout metadata discrepancy: responsible process unidentified; holdout_non_access NOT VERIFIED."
+ ],
+ "authorized_scope_note": "Only verification/level8/mixed_load.json changed. tests/level8_loadgen.py and tests/test_level8_image.py are unchanged."
+}
