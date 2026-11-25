@@ -1,0 +1,199 @@
+{
+ "classification_version": "1",
+ "review_status": "REVIEWED",
+ "inventory_sha256": "7576dc779e8fa5bd4e8f76e06697f9f2c546129f4a16c4b69043bf7bde7c67d4",
+ "entries": [
+  {
+   "path": "artifacts/v1/level3_evaluation_contract.json",
+   "class": "EXCLUDED_PENDING_CLASSIFICATION",
+   "reason": "Contract, handoff or preprocessing record that may embed data-derived values or holdout evaluation facts; not classified."
+  },
+  {
+   "path": "artifacts/v1/level3_selection_lock.json",
+   "class": "EXCLUDED_PENDING_CLASSIFICATION",
+   "reason": "Contract, handoff or preprocessing record that may embed data-derived values or holdout evaluation facts; not classified."
+  },
+  {
+   "path": "artifacts/v1/level4_features_contract.json",
+   "class": "EXCLUDED_PENDING_CLASSIFICATION",
+   "reason": "Contract, handoff or preprocessing record that may embed data-derived values or holdout evaluation facts; not classified."
+  },
+  {
+   "path": "artifacts/v1/preprocessing.json",
+   "class": "EXCLUDED_PENDING_CLASSIFICATION",
+   "reason": "Contract, handoff or preprocessing record that may embed data-derived values or holdout evaluation facts; not classified."
+  },
+  {
+   "path": "artifacts/v2/level5_features_handoff.json",
+   "class": "EXCLUDED_PENDING_CLASSIFICATION",
+   "reason": "Contract, handoff or preprocessing record that may embed data-derived values or holdout evaluation facts; not classified."
+  },
+  {
+   "path": "artifacts/v3/level5_mlp_state.pt",
+   "class": "EXCLUDED_PENDING_CLASSIFICATION",
+   "reason": "Earlier or intermediate weights (data-derived), not needed by the Level 8 runtime, not inspected."
+  },
+  {
+   "path": "artifacts/v3/level5_preprocessor.json",
+   "class": "EXCLUDED_PENDING_CLASSIFICATION",
+   "reason": "Contract, handoff or preprocessing record that may embed data-derived values or holdout evaluation facts; not classified."
+  },
+  {
+   "path": "artifacts/v3/level6_finetune_handoff.json",
+   "class": "EXCLUDED_PENDING_CLASSIFICATION",
+   "reason": "Contract, handoff or preprocessing record that may embed data-derived values or holdout evaluation facts; not classified."
+  },
+  {
+   "path": "artifacts/v4/level6_preprocessor.json",
+   "class": "APPROVED_MANDATORY",
+   "reason": "Approved by the L8-3DIV authorization for restricted, prospective staging and integrity verification (established serving role)."
+  },
+  {
+   "path": "artifacts/v4/level6_selected_model.pt",
+   "class": "APPROVED_MANDATORY",
+   "reason": "Approved by the L8-3DIV authorization for restricted, prospective staging and integrity verification (established serving role)."
+  },
+  {
+   "path": "artifacts/v4/level6_source_pretrained.pt",
+   "class": "EXCLUDED_PENDING_CLASSIFICATION",
+   "reason": "Earlier or intermediate weights (data-derived), not needed by the Level 8 runtime, not inspected."
+  },
+  {
+   "path": "artifacts/v4/level6_source_preview.pt",
+   "class": "EXCLUDED_PENDING_CLASSIFICATION",
+   "reason": "Earlier or intermediate weights (data-derived), not needed by the Level 8 runtime, not inspected."
+  },
+  {
+   "path": "artifacts/v4/level7_deploy_handoff.json",
+   "class": "APPROVED_MANDATORY",
+   "reason": "Approved by the L8-3DIV authorization for restricted, prospective staging and integrity verification (established serving role)."
+  },
+  {
+   "path": "contracts/v1/schema_contract.json",
+   "class": "EXCLUDED_PENDING_CLASSIFICATION",
+   "reason": "Schema contract; not confirmed free of data-derived values in this review."
+  },
+  {
+   "path": "contracts/v2/feature_schema_contract.json",
+   "class": "EXCLUDED_PENDING_CLASSIFICATION",
+   "reason": "Schema contract; not confirmed free of data-derived values in this review."
+  },
+  {
+   "path": "evidence/v1/schema_drift_evidence.json",
+   "class": "EXCLUDED_PENDING_CLASSIFICATION",
+   "reason": "Data-derived report or evidence; content not classified."
+  },
+  {
+   "path": "reports/v1/data_quality_report.json",
+   "class": "EXCLUDED_PENDING_CLASSIFICATION",
+   "reason": "Data-derived report or evidence; content not classified."
+  },
+  {
+   "path": "reports/v1/threshold_analysis.json",
+   "class": "EXCLUDED_PENDING_CLASSIFICATION",
+   "reason": "Data-derived report or evidence; content not classified."
+  },
+  {
+   "path": "reports/v1/training_experiment.json",
+   "class": "EXCLUDED_PENDING_CLASSIFICATION",
+   "reason": "Data-derived report or evidence; content not classified."
+  },
+  {
+   "path": "reports/v1/tree_capacity_experiment.json",
+   "class": "EXCLUDED_PENDING_CLASSIFICATION",
+   "reason": "Data-derived report or evidence; content not classified."
+  },
+  {
+   "path": "reports/v2/feature_experiment.json",
+   "class": "EXCLUDED_PENDING_CLASSIFICATION",
+   "reason": "Data-derived report or evidence; content not classified."
+  },
+  {
+   "path": "reports/v2/leakage_proxy_experiment.json",
+   "class": "EXCLUDED_PENDING_CLASSIFICATION",
+   "reason": "Data-derived report or evidence; content not classified."
+  },
+  {
+   "path": "reports/v3/neural_network_experiment.json",
+   "class": "EXCLUDED_PENDING_CLASSIFICATION",
+   "reason": "Data-derived report or evidence; content not classified."
+  },
+  {
+   "path": "reports/v3/overfit_experiment.json",
+   "class": "EXCLUDED_PENDING_CLASSIFICATION",
+   "reason": "Data-derived report or evidence; content not classified."
+  },
+  {
+   "path": "reports/v4/catastrophic_forgetting.json",
+   "class": "EXCLUDED_PENDING_CLASSIFICATION",
+   "reason": "Data-derived report or evidence; content not classified."
+  },
+  {
+   "path": "reports/v4/finetune_experiment.json",
+   "class": "EXCLUDED_PENDING_CLASSIFICATION",
+   "reason": "Data-derived report or evidence; content not classified."
+  },
+  {
+   "path": "serving-manifest.json",
+   "class": "APPROVED_MANDATORY",
+   "reason": "Approved by the L8-3DIV authorization for restricted, prospective staging and integrity verification (established serving role)."
+  },
+  {
+   "path": "artifacts/v1/holdout_consumed.json",
+   "class": "EXCLUDED_PENDING_CLASSIFICATION",
+   "reason": "Holdout marker metadata; relates to the consumed holdout. Isolated mode does not perform its cross-checks."
+  },
+  {
+   "path": "data/v1/cleaned/run_readiness_observations.csv",
+   "class": "EXCLUDED_DATASET",
+   "reason": "Named dataset; never read, hashed or mounted."
+  },
+  {
+   "path": "data/v1/processed/train.csv",
+   "class": "EXCLUDED_DATASET",
+   "reason": "Named dataset; never read, hashed or mounted."
+  },
+  {
+   "path": "data/v1/raw/run_readiness_observations.csv",
+   "class": "EXCLUDED_DATASET",
+   "reason": "Named dataset; never read, hashed or mounted."
+  },
+  {
+   "path": "models/v1/decision_tree.joblib",
+   "class": "EXCLUDED_PENDING_CLASSIFICATION",
+   "reason": "Fitted earlier-level model; data-derived, not needed by the Level 8 runtime, not inspected."
+  },
+  {
+   "path": "models/v1/logistic_regression.joblib",
+   "class": "EXCLUDED_PENDING_CLASSIFICATION",
+   "reason": "Fitted earlier-level model; data-derived, not needed by the Level 8 runtime, not inspected."
+  },
+  {
+   "path": "models/v1/majority_baseline.joblib",
+   "class": "EXCLUDED_PENDING_CLASSIFICATION",
+   "reason": "Fitted earlier-level model; data-derived, not needed by the Level 8 runtime, not inspected."
+  },
+  {
+   "path": "reports/v1/level3_errors.csv",
+   "class": "EXCLUDED_PENDING_CLASSIFICATION",
+   "reason": "Name suggests per-row evaluation errors; may be holdout-derived. Not inspected. Do not access."
+  },
+  {
+   "path": "reports/v1/level3_evaluation.json",
+   "class": "EXCLUDED_PENDING_CLASSIFICATION",
+   "reason": "Level 3 evaluation report; may be holdout-derived. Do not access."
+  },
+  {
+   "path": "reports/v1/level3_evaluation.md",
+   "class": "EXCLUDED_PENDING_CLASSIFICATION",
+   "reason": "Level 3 evaluation report; may be holdout-derived. Do not access."
+  }
+ ],
+ "excluded_outside_inventory": [
+  {
+   "path": "data/v1/processed/test.csv",
+   "class": "EXCLUDED_DATASET",
+   "reason": "Consumed v1 holdout; never read, hashed, mounted or inspected."
+  }
+ ]
+}

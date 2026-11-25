@@ -12,9 +12,11 @@ the Level 7 module is imported with that root before the Level 8 app is composed
 from __future__ import annotations
 
 import asyncio
+import collections
 import concurrent.futures
 import contextlib
 import copy
+import dataclasses
 import json
 import multiprocessing
 import os
@@ -38,6 +40,7 @@ from fastapi.testclient import TestClient
 from tests import test_level7_service as t7
 from tests import level8_oracle as oracle
 from tests import test_level8_dispatch as dt  # module reference only: its test classes are not imported here
+from src import level8_compare as compare
 from src import level8_dispatch as d
 from src import level8_schemas as schemas
 from src import level8_service as s8
@@ -269,7 +272,7 @@ class ResponseContractTests(unittest.TestCase):
     def test_openapi_documents_the_new_contract_and_preserves_level7(self):
         spec = s8.app.openapi()
         self.assertEqual((spec["info"]["title"], spec["info"]["version"]), ("Running Readiness ML API", "5.0.0"))
-        self.assertEqual(set(spec["paths"]), {"/health", "/predict", "/v1/explanations"})
+        self.assertEqual(set(spec["paths"]), {"/health", "/predict", "/v1/explanations", "/v1/comparisons"})
         legacy = L7.app.openapi()["paths"]
         self.assertEqual(spec["paths"]["/health"], legacy["/health"])
         self.assertEqual(spec["paths"]["/predict"], legacy["/predict"])
@@ -1457,6 +1460,831 @@ class RealLoopbackDisconnectTests(unittest.TestCase):
         self.assertEqual(torch_report["after_shutdown"], torch_report["at_startup"])  # parent Torch after shutdown
         self.assertTrue(torch_report["cleanup_confirmed"])
         self.assertEqual([pid for pid in children_of(server.proc.pid) if alive(pid)], [])
+
+
+
+# ===================================================================== L8-3C comparisons
+BASE_SCENARIO = dict(VALID)
+SLEEP_LOWER = dict(VALID, sleep_hours_last_night=6.0)
+COMPARE_URL = "/v1/comparisons"
+
+
+def pair_body(original=None, modified=None):
+    return {"original": dict(original or BASE_SCENARIO), "modified": dict(modified or SLEEP_LOWER)}
+
+
+def with_generation(outcome, generation=1):
+    return dataclasses.replace(outcome, generation=generation) if outcome.kind == "result" else outcome
+
+
+class ComparisonStub(StubDispatcher):
+    """Controlled comparison admission. ``script(payload, index)`` chooses each job's outcome."""
+
+    def __init__(self, script=None, **kwargs):
+        super().__init__(**kwargs)
+        self.script = script or (lambda payload, index: with_generation(engine_outcome(payload)))
+        self.admissions = []
+
+    def submit_comparison(self, original, modified):
+        first, second = (ExplanationEngine.validate_payload(p) for p in (original, modified))
+        if self.submit_exc is not None:
+            raise self.submit_exc
+        payloads = (first,) if first == second else (first, second)
+        deadline = self.deadline if self.deadline is not None else time.monotonic() + 0.5
+        jobs = []
+        for index, payload in enumerate(payloads):
+            job = StubJob(self.script(payload, index))
+            job.deadline = deadline
+            jobs.append(job)
+        self.admissions.append(payloads)
+        self.jobs += jobs
+        return tuple(jobs)
+
+
+def comparison_client(clock=None, **kwargs):
+    stub = ComparisonStub(**kwargs)
+    app = s8.build_app(lambda root, hashes: stub, clock=clock) if clock else s8.build_app(lambda root, hashes: stub)
+    return TestClient(app), stub
+
+
+class ComparisonAssertions:
+    def assert_error(self, response, status, code, retry=None):
+        body = plain(response)
+        self.assertEqual((response.status_code, body["error"]["code"]), (status, code), response.text)
+        self.assertEqual(set(body), {"error"})  # never a partial comparison
+        self.assertEqual(body["error"]["message"], s8._COMPARISON_MESSAGES[code])
+        self.assertEqual(response.headers["cache-control"], "no-store")
+        self.assertEqual(response.headers.get("retry-after"), retry)
+        self.assertEqual(response.headers["content-type"], "application/json")
+        s8.ComparisonErrorResponse.model_validate(body)
+        for forbidden in ('"features"', '"differences"', "Traceback", "/workspace", "/app/"):
+            self.assertNotIn(forbidden, response.text)
+        return body["error"]
+
+
+class ComparisonResponseTests(ComparisonAssertions, unittest.TestCase):
+    def test_distinct_scenarios_use_two_evaluations_with_exact_association(self):
+        client, stub = comparison_client()
+        with client:
+            response = client.post(COMPARE_URL, json=pair_body())
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual((response.headers["cache-control"], response.headers["content-type"]),
+                         ("no-store", "application/json"))
+        result = compare.ComparisonResponse.model_validate_json(response.text)
+        self.assertEqual([len(a) for a in stub.admissions], [2])
+        self.assertEqual([p["sleep_hours_last_night"] for p in stub.admissions[0]], [7.0, 6.0])
+        for row, name in zip(result.features, schemas.FEATURES):
+            self.assertEqual((row.input.original, row.input.modified),
+                             (float(BASE_SCENARIO[name]), float(SLEEP_LOWER[name])))
+        self.assertEqual(result.differences.changed_features, ["sleep_hours_last_night"])
+        self.assertTrue(finite_numbers(plain(response)))
+        self.assertEqual(stub.cancelled, [])
+
+    def test_identical_scenarios_use_one_evaluation(self):
+        client, stub = comparison_client()
+        with client:
+            response = client.post(COMPARE_URL, json=pair_body(modified=dict(VALID, sleep_hours_last_night=7)))
+        result = compare.ComparisonResponse.model_validate_json(response.text)
+        self.assertEqual(([len(a) for a in stub.admissions], len(stub.jobs)), ([1], 1))
+        self.assertEqual((result.differences.logit, result.differences.probability, result.differences.changed_features,
+                          result.ranking), (0.0, 0.0, [], []))
+        self.assertTrue(all(r.attribution.delta == 0.0 and r.input.delta == 0.0 for r in result.features))
+        self.assertEqual(result.original, result.modified)
+
+    def test_identical_scenarios_do_not_bypass_numerical_validation(self):
+        broken = success_outcome().explanation
+        broken["attributions"][0]["attribution"] += 1.0
+        client, _ = comparison_client(script=lambda p, i: d.Outcome("result", explanation=broken, generation=1))
+        with client:
+            self.assert_error(client.post(COMPARE_URL, json=pair_body(modified=BASE_SCENARIO)), 503,
+                              "explanation_unavailable", "5")
+
+    def test_eligibility_of_both_scenarios_in_fixed_order_without_values(self):
+        client, stub = comparison_client()
+        with client:
+            response = client.post(COMPARE_URL, json=pair_body(
+                dict(VALID, resting_hr_morning=58.25, weekly_km_to_date=19.25),
+                dict(VALID, sleep_hours_last_night=8.25)))
+        error = self.assert_error(response, 422, "outside_explanation_domain")
+        self.assertEqual(error["violations"], [
+            {"scenario": "original", "feature": "weekly_km_to_date", "min": 20.0, "max": 45.0},
+            {"scenario": "original", "feature": "resting_hr_morning", "min": 45.0, "max": 57.0},
+            {"scenario": "modified", "feature": "sleep_hours_last_night", "min": 5.5, "max": 8.0}])
+        for value in ("19.25", "58.25", "8.25"):
+            self.assertNotIn(value, response.text)
+        self.assertEqual((stub.admissions, stub.jobs), ([], []))
+
+    def test_admission_refusals_keep_codes_and_retry_after(self):
+        for code, retry in (("explanation_overloaded", "1"), ("explanation_unavailable", "5")):
+            client, stub = comparison_client(submit_exc=d.AdmissionRejected(code))
+            with client:
+                self.assert_error(client.post(COMPARE_URL, json=pair_body()), 503, code, retry)
+        client, _ = comparison_client(submit_exc=RuntimeError("SECRET-internal-detail"))
+        with client:
+            response = client.post(COMPARE_URL, json=pair_body())
+        self.assert_error(response, 503, "explanation_unavailable", "5")
+        self.assertNotIn("SECRET", response.text)
+
+    def test_unavailable_without_a_reference(self):
+        client, stub = comparison_client()
+        with client:
+            client.app.state.explanation_reference = None
+            self.assert_error(client.post(COMPARE_URL, json=pair_body()), 503, "explanation_unavailable", "5")
+        self.assertEqual(stub.admissions, [])
+
+    def fails_on_side(self, make, status, code, retry=None):
+        for side in (0, 1):
+            with self.subTest(side=side, code=code):
+                client, _ = comparison_client(
+                    script=lambda p, i: make(p) if i == side else with_generation(engine_outcome(p)))
+                with client:
+                    self.assert_error(client.post(COMPARE_URL, json=pair_body()), status, code, retry)
+
+    def test_operational_failure_on_either_side(self):
+        self.fails_on_side(lambda p: error_outcome("explanation_numerical_check_failed"), 503,
+                           "explanation_numerical_check_failed")
+        self.fails_on_side(lambda p: error_outcome("explanation_deadline_exceeded"), 504,
+                           "explanation_deadline_exceeded")
+        self.fails_on_side(lambda p: error_outcome("explanation_unavailable"), 503, "explanation_unavailable", "5")
+        self.fails_on_side(lambda p: error_outcome("invalid_explanation_input"), 503, "explanation_unavailable", "5")
+
+    def test_child_domain_violation_is_labelled_with_its_scenario(self):
+        violation = {"feature": "weekly_km_to_date", "min": 20.0, "max": 45.0}
+        client, _ = comparison_client(script=lambda p, i: error_outcome("outside_explanation_domain", [violation])
+                                      if i == 1 else with_generation(engine_outcome(p)))
+        with client:
+            error = self.assert_error(client.post(COMPARE_URL, json=pair_body()), 422, "outside_explanation_domain")
+        self.assertEqual(error["violations"], [dict(violation, scenario="modified")])
+
+    def test_malformed_or_misassociated_result_on_either_side(self):
+        def corrupt(change):
+            def make(payload):
+                body = engine_outcome(payload).explanation
+                change(body)
+                return d.Outcome("result", explanation=body, generation=1)
+            return make
+
+        for change in (lambda b: b.pop("logit"), lambda b: b["attributions"].reverse(),
+                       lambda b: b.update(completeness_residual=0.5),
+                       lambda b: b["prediction"].update(decision=1 - b["prediction"]["decision"])):
+            self.fails_on_side(corrupt(change), 503, "explanation_unavailable", "5")
+        other = dict(VALID, sleep_hours_last_night=6.5)  # a genuine result for a different input
+        self.fails_on_side(lambda p: with_generation(engine_outcome(other)), 503, "explanation_unavailable", "5")
+
+    def test_swapped_results_are_rejected(self):
+        inputs = (BASE_SCENARIO, SLEEP_LOWER)
+        client, _ = comparison_client(script=lambda p, i: with_generation(engine_outcome(inputs[1 - i])))
+        with client:
+            self.assert_error(client.post(COMPARE_URL, json=pair_body()), 503, "explanation_unavailable", "5")
+
+    def test_generation_mismatch_or_missing_provenance(self):
+        for generations in ((1, 2), (2, 1), (None, None), (1, None), (None, 1), (True, True)):
+            with self.subTest(generations=generations):
+                client, _ = comparison_client(script=lambda p, i: dataclasses.replace(
+                    engine_outcome(p), generation=generations[i]))
+                with client:
+                    self.assert_error(client.post(COMPARE_URL, json=pair_body()), 503,
+                                      "explanation_unavailable", "5")
+        client, _ = comparison_client(script=lambda p, i: engine_outcome(p))
+        with client:
+            self.assert_error(client.post(COMPARE_URL, json=pair_body(modified=BASE_SCENARIO)), 503,
+                              "explanation_unavailable", "5")
+
+    def test_job_count_must_match_whether_the_scenarios_differ(self):
+        class Wrong(ComparisonStub):
+            def submit_comparison(self, original, modified):
+                return super().submit_comparison(original, original)
+
+        stub = Wrong()
+        with TestClient(s8.build_app(lambda root, hashes: stub)) as client:
+            self.assert_error(client.post(COMPARE_URL, json=pair_body()), 503, "explanation_unavailable", "5")
+
+    def test_shared_identity_mismatch_and_consistency_errors_are_not_exposed(self):
+        original = schemas.build_response
+        calls = []
+
+        def other_scope(*args, **kwargs):
+            response = original(*args, **kwargs)
+            calls.append(1)
+            if len(calls) == 2:
+                response.model.evidence_scope = "SECRET-other-scope"
+            return response
+
+        client, _ = comparison_client()
+        with client, mock.patch.object(schemas, "build_response", other_scope):
+            response = client.post(COMPARE_URL, json=pair_body())
+        self.assert_error(response, 503, "explanation_unavailable", "5")
+        for text in ("SECRET", "shared_model"):
+            self.assertNotIn(text, response.text)
+        client, _ = comparison_client()
+        with client, mock.patch.object(compare, "build_comparison",
+                                       side_effect=compare.ComparisonConsistencyError("completeness_gate")):
+            response = client.post(COMPARE_URL, json=pair_body())
+        self.assert_error(response, 503, "explanation_unavailable", "5")
+        self.assertNotIn("completeness_gate", response.text)
+
+    def test_both_sides_pass_through_the_trusted_builders(self):
+        client, _ = comparison_client()
+        with client, mock.patch.object(schemas, "build_response", wraps=schemas.build_response) as explain, \
+                mock.patch.object(compare, "build_comparison", wraps=compare.build_comparison) as build:
+            self.assertEqual(client.post(COMPARE_URL, json=pair_body()).status_code, 200)
+        self.assertEqual((explain.call_count, build.call_count), (2, 1))
+        self.assertTrue(all(type(a) is schemas.ExplanationResponse for a in build.call_args.args))
+
+
+class ComparisonPrecedenceTests(ComparisonAssertions, unittest.TestCase):
+    """Failure selection follows scenario order, never which future completed first."""
+
+    def run_script(self, original, modified, deadline_in=0.3, order=("modified", "original"), delay=0.03):
+        """``None`` stays unresolved; others are resolved from a thread in the given order."""
+        outcomes = {"original": original, "modified": modified}
+
+        class Timed(ComparisonStub):
+            def submit_comparison(stub, first, second):
+                jobs = super().submit_comparison(first, second)
+
+                def resolve():
+                    for name in order:
+                        time.sleep(delay)
+                        job = jobs[("original", "modified").index(name)]
+                        if outcomes[name] is not None and not job.future.done():
+                            job.future.set_result(outcomes[name])
+
+                threading.Thread(target=resolve, daemon=True).start()
+                return jobs
+
+        stub = Timed(script=lambda p, i: None)
+        with TestClient(s8.build_app(lambda root, hashes: stub)) as client:
+            original_submit = stub.submit_comparison
+
+            def submit(first, second):
+                stub.deadline = time.monotonic() + deadline_in
+                return original_submit(first, second)
+
+            stub.submit_comparison = submit
+            response = client.post(COMPARE_URL, json=pair_body())
+        return response, stub
+
+    def good(self, payload):
+        return with_generation(engine_outcome(payload))
+
+    def test_primary_beats_collateral_regardless_of_completion_order(self):
+        for order in (("modified", "original"), ("original", "modified")):
+            with self.subTest(order=order):
+                response, _ = self.run_script(error_outcome("explanation_deadline_exceeded"),
+                                              error_outcome("explanation_unavailable"), order=order)
+                self.assert_error(response, 504, "explanation_deadline_exceeded")
+
+    def test_failed_modified_waits_for_the_original_to_classify(self):
+        response, _ = self.run_script(self.good(BASE_SCENARIO), error_outcome("explanation_numerical_check_failed"))
+        self.assert_error(response, 503, "explanation_numerical_check_failed")
+        response, _ = self.run_script(error_outcome("explanation_numerical_check_failed"),
+                                      error_outcome("explanation_unavailable"))
+        self.assert_error(response, 503, "explanation_numerical_check_failed")
+
+    def test_failed_modified_with_a_stuck_original_ends_at_the_shared_deadline(self):
+        started = time.monotonic()
+        response, stub = self.run_script(None, error_outcome("explanation_unavailable"), deadline_in=0.2)
+        self.assert_error(response, 504, "explanation_deadline_exceeded")
+        self.assertLess(time.monotonic() - started, 10.0)
+        self.assertEqual(stub.cancelled, [stub.jobs[0]])
+
+    def test_failed_original_decides_immediately_and_cancels_the_sibling(self):
+        response, stub = self.run_script(error_outcome("explanation_numerical_check_failed"), None,
+                                         deadline_in=5.0, order=("original",))
+        self.assert_error(response, 503, "explanation_numerical_check_failed")
+        self.assertEqual(stub.cancelled, [stub.jobs[1]])
+        self.assertTrue(stub.jobs[1].future.cancelled())
+
+    def test_deadline_cancels_the_later_job_first(self):
+        response, stub = self.run_script(None, None, deadline_in=0.05)
+        self.assert_error(response, 504, "explanation_deadline_exceeded")
+        self.assertEqual(stub.cancelled, [stub.jobs[1], stub.jobs[0]])
+
+
+class ComparisonDeadlineTests(ComparisonAssertions, unittest.TestCase):
+    def post(self, start, finish=None, target=(None, None)):
+        clock = ManualClock(start)
+        client, stub = comparison_client(clock=clock, deadline=0.5)
+        module, name = target
+        if module is None:
+            with client:
+                return client.post(COMPARE_URL, json=pair_body()), stub
+        real_function = getattr(module, name)
+
+        def advancing(*args, **kwargs):
+            result = real_function(*args, **kwargs)
+            clock.t = finish
+            return result
+
+        with client, mock.patch.object(module, name, advancing):
+            return client.post(COMPARE_URL, json=pair_body()), stub
+
+    def test_resolved_results_at_or_after_the_deadline_are_late(self):
+        for start in (0.5, 5.0):
+            response, stub = self.post(start)
+            self.assert_error(response, 504, "explanation_deadline_exceeded")
+            self.assertEqual(stub.cancelled, [])
+
+    def test_deadline_during_validation_construction_and_rendering(self):
+        for target in ((schemas, "verify_consistency"), (schemas, "build_response"), (compare, "build_comparison"),
+                       (s8, "JSONResponse")):
+            with self.subTest(target=target[1]):
+                if target[1] == "JSONResponse":
+                    response, _ = self.post_rendering(0.5)
+                    self.assert_error(response, 504, "explanation_deadline_exceeded")
+                    self.assertEqual(self.post_rendering(0.4999)[0].status_code, 200)
+                    continue
+                self.assert_error(self.post(0.0, 0.5, target)[0], 504, "explanation_deadline_exceeded")
+                self.assertEqual(self.post(0.0, 0.4999, target)[0].status_code, 200)
+
+    def post_rendering(self, finish):
+        clock = ManualClock(0.0)
+        client, stub = comparison_client(clock=clock, deadline=0.5)
+        real_dump = compare.ComparisonResponse.model_dump
+
+        def advancing(model, *args, **kwargs):
+            result = real_dump(model, *args, **kwargs)
+            clock.t = finish
+            return result
+
+        with client, mock.patch.object(compare.ComparisonResponse, "model_dump", advancing):
+            return client.post(COMPARE_URL, json=pair_body()), stub
+
+
+class ComparisonRequestParsingTests(ComparisonAssertions, unittest.TestCase):
+    JSON = {"content-type": "application/json"}
+
+    def send(self, content, headers=None):
+        client, stub = comparison_client()
+        with client:
+            response = client.post(COMPARE_URL, content=content, headers=self.JSON if headers is None else headers)
+        return response, stub
+
+    def refused(self, content, status, code, headers=None):
+        response, stub = self.send(content, headers)
+        error = self.assert_error(response, status, code)
+        self.assertEqual((stub.admissions, stub.jobs, stub.submitted), ([], [], []), "no capacity used")
+        return response, error
+
+    def test_invalid_nested_fields_report_only_allowlisted_identifiers(self):
+        def body(**sides):
+            return json.dumps(dict(pair_body(), **sides))
+
+        missing = {k: v for k, v in VALID.items() if k != "prior_injury"}
+        cases = (
+            (body(original=missing), [{"scenario": "original", "feature": "prior_injury", "problem": "missing_field"}]),
+            (json.dumps({"original": VALID}), [{"scenario": "modified", "problem": "missing_field"}]),
+            (body(modified=dict(VALID, extra_field=1, other=2)), [{"scenario": "modified", "problem": "unknown_field"}]),
+            (body(extra=1), [{"problem": "unknown_field"}]),
+            (body(original=None), [{"scenario": "original", "problem": "invalid_value"}]),
+            (body(modified=dict(VALID, prior_injury=1.0, weekly_km_to_date=True)),
+             [{"scenario": "modified", "feature": "weekly_km_to_date", "problem": "invalid_value"},
+              {"scenario": "modified", "feature": "prior_injury", "problem": "invalid_value"}]),
+            (body(original=dict(VALID, resting_hr_morning="50"), modified=dict(VALID, sleep_hours_last_night=None)),
+             [{"scenario": "original", "feature": "resting_hr_morning", "problem": "invalid_value"},
+              {"scenario": "modified", "feature": "sleep_hours_last_night", "problem": "invalid_value"}]),
+            (body(original=dict(VALID, weekly_km_to_date=201.0)),
+             [{"scenario": "original", "feature": "weekly_km_to_date", "problem": "invalid_value"}]),
+            ("[]", [{"problem": "invalid_value"}]),
+            ('"text"', [{"problem": "invalid_value"}]),
+        )
+        for content, violations in cases:
+            with self.subTest(content=content[:60]):
+                _, error = self.refused(content, 422, "invalid_comparison_request")
+                self.assertEqual(error["violations"], violations)
+        huge = json.dumps(pair_body()).replace("32.0", "1" + "0" * 400, 1)
+        self.refused(huge, 422, "invalid_comparison_request")
+
+    def test_duplicate_keys_at_every_depth(self):
+        good = json.dumps(pair_body())
+        side = json.dumps(VALID)
+        for content in (
+            good[:-1] + ',"original":' + side + "}",
+            good.replace('"prior_injury": 0', '"prior_injury": 1, "prior_injury": 0', 1),
+            '{"original":' + side + ',"modified":' + side[:-1] + ',"weekly_km_to_date":30}}',
+            '{"original":{"a":{"b":1,"b":2}},"modified":{}}',
+        ):
+            with self.subTest(content=content[-60:]):
+                self.refused(content, 422, "duplicate_json_key")
+
+    def test_malformed_and_non_finite_json(self):
+        good = json.dumps(pair_body())
+        cases = [good[:-1], "", "{", good + "x", "\ufeff" + good, b"\xff\xfe{}", "[" * 4000]
+        cases += [good.replace("32.0", token, 1) for token in ("NaN", "Infinity", "-Infinity", "1e999", "-1e999")]
+        for content in cases:
+            with self.subTest(content=repr(content[:30])):
+                self.refused(content, 422, "malformed_comparison_json")
+
+    def test_deep_but_valid_nesting_within_the_limit_fails_schema_validation(self):
+        # The size limit bounds the depth. The canonical parser accepts it, so it is a schema failure.
+        for content in ("[" * 2000 + "]" * 2000, '{"original":' + "[" * 1900 + "]" * 1900 + ',"modified":{}}'):
+            with self.subTest(content=content[:20]):
+                _, error = self.refused(content, 422, "invalid_comparison_request")
+                self.assertLessEqual(len(error["violations"]), 6)
+
+    def test_body_limit_declared_and_streamed(self):
+        self.assertEqual(s8.MAX_COMPARISON_BODY_BYTES, 4096)
+        good = json.dumps(pair_body()).encode()
+        response, _ = self.send(good + b" " * (4096 - len(good)))
+        self.assertEqual(response.status_code, 200, response.text)
+        self.refused(good + b" " * (4097 - len(good)), 413, "comparison_request_too_large")
+
+        def chunks():
+            for _ in range(10):
+                yield b" " * 1000
+
+        response, _ = self.refused(chunks(), 413, "comparison_request_too_large")
+        self.assertNotIn("content-length", response.request.headers)
+        pretty = json.dumps({side: {k: 1.2345678901234567e+1 for k in schemas.FEATURES}
+                             for side in compare.SCENARIOS}, indent=4)
+        self.assertLess(len(pretty), 1024)
+
+    def test_media_type_contract(self):
+        good = json.dumps(pair_body())
+        for content_type in ("application/json", "APPLICATION/JSON", "application/json; charset=utf-8",
+                             'application/json;charset="UTF-8"'):
+            with self.subTest(accepted=content_type):
+                self.assertEqual(self.send(good, {"content-type": content_type})[0].status_code, 200)
+        for headers in ({}, {"content-type": "text/plain"}, {"content-type": "application/x-www-form-urlencoded"},
+                        {"content-type": "application/problem+json"},
+                        {"content-type": "application/json; charset=latin-1"},
+                        {"content-type": "application/json; boundary=x"},
+                        {"content-type": "application/json", "content-encoding": "gzip"}):
+            with self.subTest(refused=headers):
+                self.refused(good, 415, "unsupported_media_type", headers)
+
+    def test_nothing_client_supplied_is_echoed(self):
+        marks = ("SYNTHETIC-TOKEN-sk-000000", "synthetic.person@example.invalid", "/Users/synthetic/secret.txt",
+                 "<script>synthetic</script>", "87.654321")
+        token, mail, path, script, number = marks
+        documents = (
+            json.dumps(pair_body(modified=dict(VALID, **{token: mail}))),
+            json.dumps(dict(pair_body(), **{path: script})),
+            json.dumps(pair_body(modified=dict(VALID, weekly_km_to_date=token))),
+            json.dumps(pair_body(modified=dict(VALID, weekly_km_to_date=float(number) + 200))),
+            '{"%s": 1, "%s": 2}' % (token, token),
+            '{"original": %s ' % script,
+            json.dumps({token: {mail: path}}),
+        )
+        for content in documents:
+            response, stub = self.send(content)
+            self.assertIn(response.status_code, (422,), response.text)
+            everything = response.text + json.dumps(dict(response.headers))
+            for mark in marks + ("287.654321",):
+                self.assertNotIn(mark, everything)
+            self.assertEqual(stub.admissions, [])
+        response, _ = self.send(token, {"content-type": mail})
+        self.assertNotIn(mail, response.text + json.dumps(dict(response.headers)))
+
+    def test_no_client_selectable_settings(self):
+        for extra in ("baseline", "n_steps", "threshold", "model", "method"):
+            self.refused(json.dumps(dict(pair_body(), **{extra: 1})), 422, "invalid_comparison_request")
+
+
+class ComparisonOpenApiTests(unittest.TestCase):
+    def test_request_response_and_error_contracts(self):
+        spec = s8.app.openapi()
+        path = spec["paths"]["/v1/comparisons"]
+        self.assertEqual(set(path), {"post"})
+        operation = path["post"]
+        self.assertNotIn("parameters", operation)
+        self.assertEqual(set(operation["responses"]), {"200", "413", "415", "422", "503", "504"})
+        self.assertIn("ComparisonResponse", json.dumps(operation["responses"]["200"]))
+        for status in ("413", "415", "422", "503", "504"):
+            self.assertIn("ComparisonErrorResponse", json.dumps(operation["responses"][status]))
+        self.assertTrue(operation["requestBody"]["required"])
+        request = operation["requestBody"]["content"]["application/json"]["schema"]
+        self.assertEqual((request["type"], request["additionalProperties"], sorted(request["required"]),
+                          sorted(request["properties"])),
+                         ("object", False, ["modified", "original"], ["modified", "original"]))
+        for side in compare.SCENARIOS:
+            self.assertEqual(request["properties"][side], {"$ref": "#/components/schemas/PredictionRequest"})
+        components = spec["components"]["schemas"]
+        self.assertFalse(components["PredictionRequest"]["additionalProperties"])
+        self.assertEqual(components["ComparisonResponse"]["properties"]["schema_version"]["const"], "comparison.v1")
+
+        def references(node):
+            if isinstance(node, dict):
+                if "$ref" in node:
+                    yield node["$ref"]
+                for value in node.values():
+                    yield from references(value)
+            elif isinstance(node, list):
+                for value in node:
+                    yield from references(value)
+
+        for reference in references(spec):
+            self.assertIn(reference.removeprefix("#/components/schemas/"), components, reference)
+
+    def test_existing_operations_do_not_gain_comparison_content(self):
+        spec = s8.app.openapi()
+        for path in ("/health", "/predict", "/v1/explanations"):
+            self.assertNotIn("Comparison", json.dumps(spec["paths"][path]))
+
+
+class ComparisonHttpTests(ComparisonAssertions, unittest.IsolatedAsyncioTestCase):
+    """The real dispatcher with controlled fake workers. Helpers are borrowed, not inherited."""
+
+    asyncSetUp = HttpDeadlineTests.asyncSetUp
+    start = HttpDeadlineTests.start
+    push_ready = HttpDeadlineTests.push_ready
+    until = HttpDeadlineTests.until
+    tasks = HttpDeadlineTests.tasks
+    LONG = {"exec_timeout": 20.0, "request_deadline": 20.0}
+
+    def answer(self, handle):
+        message = handle.sent[-1]
+        handle.push(("message", {"t": "result", "gen": handle.generation, "id": message["id"],
+                                 "explanation": engine_outcome(message["payload"]).explanation}))
+
+    async def post_comparison(self, body):
+        content = json.dumps(body).encode()
+        disconnect, sent, state = asyncio.Event(), [], {"first": True}
+
+        async def receive():
+            if state["first"]:
+                state["first"] = False
+                return {"type": "http.request", "body": content, "more_body": False}
+            await disconnect.wait()
+            return {"type": "http.disconnect"}
+
+        async def send(message):
+            sent.append(message)
+
+        scope = {"type": "http", "asgi": {"version": "3.0"}, "http_version": "1.1", "method": "POST",
+                 "path": COMPARE_URL, "raw_path": COMPARE_URL.encode(), "query_string": b"", "root_path": "",
+                 "scheme": "http", "server": ("t", 80), "client": ("c", 1),
+                 "headers": [(b"host", b"t"), (b"content-type", b"application/json"),
+                             (b"content-length", str(len(content)).encode())]}
+        return asyncio.create_task(self.app(scope, receive, send)), sent, disconnect
+
+    def counters(self):
+        return collections.Counter(self.disp.diagnostics()["counters"])
+
+    async def idle(self):
+        await self.until(lambda: self.disp.diagnostics()["active"] == 0 and self.disp.diagnostics()["queued"] == 0)
+        diag = self.disp.diagnostics()
+        self.assertEqual((diag["active"], diag["queued"], diag["invariant_violations"]), (0, 0, 0))
+
+    async def assert_disconnected(self, task, sent, baseline):
+        await asyncio.wait_for(task, 10)
+        start = next(m for m in sent if m["type"] == "http.response.start")
+        self.assertEqual(start["status"], 499)
+        self.assertIn((b"cache-control", b"no-store"), start["headers"])
+        self.assertEqual(self.tasks() - baseline, set())
+
+    async def test_success_through_the_real_dispatcher(self):
+        await self.start(**self.LONG)
+        baseline = self.tasks()
+        pending = asyncio.create_task(self.client.post(COMPARE_URL, json=pair_body()))
+        for count in (1, 2):
+            await self.until(lambda: len(self.handles[0].sent) == count)
+            self.answer(self.handles[0])
+        response = await pending
+        self.assertEqual(response.status_code, 200, response.text)
+        compare.ComparisonResponse.model_validate_json(response.text)
+        await self.idle()
+        c = self.counters()
+        self.assertEqual((c["admitted"], c["comparison_requests_admitted"], c["completed"]), (2, 1, 2))
+        self.assertEqual(self.tasks(), baseline)
+
+    async def test_pair_overload_with_one_slot_left(self):
+        await self.start(**self.LONG)
+        for _ in range(8):
+            self.disp.submit(VALID)
+        response = await self.client.post(COMPARE_URL, json=pair_body())
+        self.assert_error(response, 503, "explanation_overloaded", "1")
+        c = self.counters()
+        self.assertEqual((c["admitted"], c["comparison_requests_rejected_overloaded"], c["rejected_overloaded"],
+                          self.disp.diagnostics()["queued"]), (8, 1, 0, 7))
+
+    async def test_worker_not_ready(self):
+        await self.start(**self.LONG)
+        self.handles[0].push(("closed", "eof"))
+        await self.until(lambda: self.disp.diagnostics()["state"] != d.READY)
+        self.assert_error(await self.client.post(COMPARE_URL, json=pair_body()), 503,
+                          "explanation_unavailable", "5")
+        self.assertEqual(self.counters()["comparison_requests_rejected_unavailable"], 1)
+
+    async def test_disconnect_before_either_evaluation_is_dispatched(self):
+        await self.start(**self.LONG)
+        blocker = self.disp.submit(VALID)
+        await self.until(lambda: self.handles[0].sent)
+        baseline = self.tasks()
+        task, sent, disconnect = await self.post_comparison(pair_body())
+        await self.until(lambda: self.disp.diagnostics()["queued"] == 2)
+        disconnect.set()
+        await self.assert_disconnected(task, sent, baseline)
+        self.assertEqual((self.disp.diagnostics()["queued"], self.counters()["cancelled_queued"]), (0, 2))
+        self.answer(self.handles[0])
+        await self.idle()
+        self.assertEqual((len(self.handles[0].sent), blocker.future.result(0).kind), (1, "result"))
+
+    async def test_disconnect_during_the_original(self):
+        await self.start(**self.LONG)
+        baseline = self.tasks()
+        task, sent, disconnect = await self.post_comparison(pair_body())
+        await self.until(lambda: self.handles[0].sent)
+        disconnect.set()
+        await self.assert_disconnected(task, sent, baseline)
+        diag, c = self.disp.diagnostics(), self.counters()
+        self.assertEqual((diag["active"], diag["queued"], c["cancelled_queued"], c["cancelled_active"]),
+                         (1, 0, 1, 1))  # the active slot stays reserved
+        self.answer(self.handles[0])
+        await self.idle()
+        self.assertEqual(len(self.handles[0].sent), 1)
+
+    async def test_disconnect_during_the_modified(self):
+        await self.start(**self.LONG)
+        baseline = self.tasks()
+        task, sent, disconnect = await self.post_comparison(pair_body())
+        await self.until(lambda: self.handles[0].sent)
+        self.answer(self.handles[0])
+        await self.until(lambda: len(self.handles[0].sent) == 2)
+        disconnect.set()
+        await self.assert_disconnected(task, sent, baseline)
+        self.assertEqual((self.disp.diagnostics()["active"], self.counters()["cancelled_active"]), (1, 1))
+        self.answer(self.handles[0])
+        await self.idle()
+
+    async def test_disconnect_between_the_evaluations(self):
+        """The modified job is held unsent: the dispatcher thread is gated inside its send."""
+        gate, reached = threading.Event(), threading.Event()
+        self.addCleanup(gate.set)
+
+        class Gated(dt.BlockingFake):
+            def send(handle, message, deadline):
+                if handle.sent:
+                    reached.set()
+                    gate.wait(20)
+                super().send(message, deadline)
+
+        await self.start(handle_cls=Gated, **self.LONG)
+        baseline = self.tasks()
+        task, sent, disconnect = await self.post_comparison(pair_body())
+        await self.until(lambda: self.handles[0].sent)
+        self.answer(self.handles[0])
+        await self.until(reached.is_set)
+        self.assertEqual(len(self.handles[0].sent), 1)
+        disconnect.set()
+        await self.assert_disconnected(task, sent, baseline)
+        gate.set()
+        await self.until(lambda: len(self.handles[0].sent) == 2)
+        self.answer(self.handles[0])
+        await self.idle()
+        self.assertEqual(self.counters()["cancelled_active"], 1)
+
+    async def test_handler_task_cancellation_cancels_both(self):
+        await self.start(**self.LONG)
+        baseline = self.tasks()
+        task, _, _ = await self.post_comparison(pair_body())
+        await self.until(lambda: self.handles[0].sent)
+        task.cancel()
+        with self.assertRaises(asyncio.CancelledError):
+            await task
+        c = self.counters()
+        self.assertEqual((c["cancelled_queued"], c["cancelled_active"]), (1, 1))
+        self.assertEqual(self.tasks() - baseline, set())
+        self.answer(self.handles[0])
+        await self.idle()
+
+    async def test_original_stall_is_a_504_not_the_collateral_unavailable(self):
+        await self.start()  # committed limits: 250 ms execution inside the 500 ms admission deadline
+        response = await self.client.post(COMPARE_URL, json=pair_body())
+        self.assert_error(response, 504, "explanation_deadline_exceeded")
+        await self.idle()
+        self.assertEqual([len(h.sent) for h in self.handles][0], 1)
+        self.assertTrue(all(not h.sent for h in self.handles[1:]))  # the sibling is never resubmitted
+
+    async def test_worker_death_between_evaluations(self):
+        await self.start(**self.LONG)
+        pending = asyncio.create_task(self.client.post(COMPARE_URL, json=pair_body()))
+        await self.until(lambda: self.handles[0].sent)
+        self.handles[0].send_error = "closed"
+        self.answer(self.handles[0])
+        self.assert_error(await pending, 503, "explanation_unavailable", "5")
+        await self.until(lambda: len(self.handles) == 2)
+        await self.idle()
+        self.assertEqual(self.handles[1].sent, [])
+
+
+# ------------------------------------------------------- real spawned worker: frozen matrix
+_MULTI = dict(VALID, weekly_km_to_date=40.0, sleep_hours_last_night=6.0, soreness_score_evening=7.0)
+REAL_MATRIX = (
+    ("identical", VALID, VALID),
+    ("single_feature", VALID, SLEEP_LOWER),
+    ("multiple_features", VALID, _MULTI),
+    ("prior_injury", VALID, dict(VALID, prior_injury=1)),
+    ("reversed_multiple", _MULTI, VALID),
+)
+
+
+class KillingHandle(d.ProcessWorkerHandle):
+    """Real worker handle that, once armed, kills and joins its own process inside the send of the
+    second explain frame: deterministically between the two evaluations of one comparison."""
+
+    def __init__(self, *args, plan, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.plan = plan
+
+    def send(self, message, deadline):
+        if message.get("t") == "explain":
+            self.plan["sent"].append((self.generation, message["id"]))
+            if self.plan["armed"] is not None:
+                self.plan["armed"] += 1
+                if self.plan["armed"] == 2:
+                    self.plan["armed"] = None
+                    self.plan["killed"] = self.generation
+                    os.kill(self.pid, signal.SIGKILL)
+                    self._proc.join(5)
+        super().send(message, deadline)
+
+
+class RealWorkerComparisonTests(ComparisonAssertions, unittest.TestCase):
+    def wait_ready(self, client):
+        end = time.monotonic() + 90
+        while time.monotonic() < end:
+            if client.app.state.explanation_dispatcher.diagnostics()["state"] == d.READY:
+                return
+            time.sleep(0.05)
+        self.fail("worker not ready")
+
+    def explain(self, client, payload):
+        response = client.post("/v1/explanations", json=payload)
+        self.assertEqual(response.status_code, 200, response.text)
+        return schemas.ExplanationResponse.model_validate_json(response.text)
+
+    def test_frozen_matrix_and_failure_between_evaluations(self):
+        plan = {"armed": None, "sent": [], "killed": None}
+
+        def make(root, hashes):
+            return d.Dispatcher(str(root), expected_artifacts=hashes, handle_factory=lambda gen: KillingHandle(
+                gen, str(root), hashes, plan=plan, clock=d.RealClock()))
+
+        app, timings = s8.build_app(make), {}
+        with TestClient(app) as client:
+            self.wait_ready(client)
+            disp = app.state.explanation_dispatcher
+            jobs_seen, real_submit = [], disp.submit_comparison
+
+            def spy(*args):
+                jobs = real_submit(*args)
+                jobs_seen.append(jobs)
+                return jobs
+
+            disp.submit_comparison = spy
+            for name, original, modified in REAL_MATRIX:
+                with self.subTest(name=name):
+                    separate = [self.explain(client, original), self.explain(client, modified)]
+                    before = collections.Counter(disp.diagnostics()["counters"])
+                    started = time.perf_counter()
+                    response = client.post(COMPARE_URL, json={"original": original, "modified": modified})
+                    timings[name] = round((time.perf_counter() - started) * 1000, 1)
+                    self.assertEqual(response.status_code, 200, response.text)
+                    result = compare.ComparisonResponse.model_validate_json(response.text)
+                    self.assertEqual(result, compare.build_comparison(*separate))  # exact, field for field
+                    for side, alone in zip((result.original, result.modified), separate):
+                        self.assertEqual((side.prediction.probability, side.prediction.logit,
+                                          side.completeness.residual),
+                                         (alone.prediction.probability, alone.prediction.logit,
+                                          alone.completeness.residual))
+                    for index, alone in enumerate(separate):
+                        key = compare.SCENARIOS[index]
+                        self.assertEqual([getattr(r.attribution, key) for r in result.features],
+                                         [a.attribution for a in alone.attributions])
+                    expected = 1 if name == "identical" else 2
+                    jobs = jobs_seen[-1]
+                    self.assertEqual(len(jobs), expected)
+                    self.assertEqual({j.future.result(0).generation for j in jobs}, {1})
+                    after = collections.Counter(disp.diagnostics()["counters"])
+                    self.assertEqual({k: after[k] - before[k] for k in ("admitted", "completed",
+                                      "comparison_requests_admitted", "comparison_evaluations_admitted")},
+                                     {"admitted": expected, "completed": expected,
+                                      "comparison_requests_admitted": 1, "comparison_evaluations_admitted": expected})
+            # controlled failure between the two evaluations
+            before_sent = len(plan["sent"])
+            plan["armed"] = 0
+            response = client.post(COMPARE_URL, json=pair_body())
+            self.assert_error(response, 503, "explanation_unavailable", "5")
+            first, second = jobs_seen[-1]
+            self.assertEqual((first.future.result(0).kind, first.future.result(0).generation), ("result", 1))
+            self.assertEqual((second.future.result(0).code, second.future.result(0).generation),
+                             ("explanation_unavailable", None))
+            self.assertEqual(plan["killed"], 1)
+            self.wait_ready(client)
+            recovered = client.post(COMPARE_URL, json=pair_body())
+            self.assertEqual(recovered.status_code, 200, recovered.text)
+            self.assertEqual({j.future.result(0).generation for j in jobs_seen[-1]}, {2})
+            sent = plan["sent"][before_sent:]
+            self.assertEqual([g for g, i in sent if i == second.req_id], [1])  # never sent to the replacement
+            diag = disp.diagnostics()
+            self.assertEqual((diag["restarts_total"], diag["active"], diag["queued"], diag["invariant_violations"]),
+                             (1, 0, 0, 0))
+            self.assertLessEqual(diag["high_water"]["admitted"], 9)
+        self.assertIs(app.state.explanation_cleanup_confirmed, True)
+        self.assertEqual(multiprocessing.active_children(), [])
+        TIMINGS["comparison_real_matrix_ms_descriptive"] = timings
 
 
 if __name__ == "__main__":

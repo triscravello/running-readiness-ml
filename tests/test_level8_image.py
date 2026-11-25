@@ -39,7 +39,7 @@ GOLDEN_ATTRIBUTIONS = (-0.0034358110278844833, -0.3442489206790924, -0.092413395
                        -0.40909576416015625, -0.20982761681079865)
 ALLOWED_FILES = {
     "level7_runtime.py", "level7_service.py", "level8_explain.py", "level8_worker.py", "level8_dispatch.py",
-    "level8_schemas.py", "level8_service.py", "lineage-attestation.json", "serving-manifest.json",
+    "level8_schemas.py", "level8_service.py", "level8_compare.py", "lineage-attestation.json", "serving-manifest.json",
     "level7-tests-passed", "artifacts/v4/level6_preprocessor.json", "artifacts/v4/level6_selected_model.pt",
     "artifacts/v4/level7_deploy_handoff.json",
 }
@@ -188,6 +188,40 @@ class FlatInProcessApplicationTests(unittest.TestCase):
         self.assertEqual(multiprocessing.active_children(), [])
         self.assertFalse([t for t in threading.enumerate() if t.name == "level8-dispatcher"])
         self.assertEqual(torch_globals(torch), before)
+
+
+class FlatComparisonApplicationTests(unittest.TestCase):
+    def test_comparison_endpoint_in_the_flat_layout(self):
+        from fastapi.testclient import TestClient
+
+        import level8_compare
+        import level8_service as s8
+
+        modified = dict(VALID, sleep_hours_last_night=6.0)
+        app = s8.build_app()
+        with TestClient(app) as client:
+            self.assertEqual(set(app.openapi()["paths"]), {"/health", "/predict", "/v1/explanations", "/v1/comparisons"})
+            end, response = time.monotonic() + 90, None
+            while time.monotonic() < end:
+                response = client.post("/v1/comparisons", json={"original": VALID, "modified": VALID})
+                if response.status_code != 503:
+                    break
+                time.sleep(0.2)
+            self.assertEqual(response.status_code, 200, response.text)
+            self.assertEqual(response.headers["cache-control"], "no-store")
+            identical = level8_compare.ComparisonResponse.model_validate_json(response.text)
+            self.assertEqual((identical.differences.logit, identical.ranking), (0.0, []))
+            self.assertEqual(tuple(r.attribution.original for r in identical.features), GOLDEN_ATTRIBUTIONS)
+            response = client.post("/v1/comparisons", json={"original": VALID, "modified": modified})
+            self.assertEqual(response.status_code, 200, response.text)
+            result = level8_compare.ComparisonResponse.model_validate_json(response.text)
+            alone = client.post("/v1/explanations", json=modified).json()
+            self.assertEqual(result.original.prediction.probability, GOLDEN_PROBABILITY)
+            self.assertEqual([r.attribution.modified for r in result.features],
+                             [a["attribution"] for a in alone["attributions"]])
+            self.assertEqual(result.differences.changed_features, ["sleep_hours_last_night"])
+        self.assertIs(app.state.explanation_cleanup_confirmed, True)
+        self.assertEqual(multiprocessing.active_children(), [])
 
 
 class FlatUvicornTests(unittest.TestCase):

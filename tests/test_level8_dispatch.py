@@ -14,6 +14,7 @@ import random
 import select
 import threading
 import unittest
+from unittest import mock
 
 from src import level8_dispatch as d
 from src import level8_worker as w
@@ -1144,6 +1145,405 @@ class StormTests(RigTestCase):
         r.pump()
         self.assertEqual(r.diag()["state"], d.STOPPED)
         self.assertTrue(all(j.future.done() for j in jobs))
+
+
+
+# ============================================================ L8-3C: atomic comparison admission
+ORIGINAL = dict(VALID, sleep_hours_last_night=7.0)
+MODIFIED = dict(VALID, sleep_hours_last_night=6.0)
+
+
+def marker(sleep):
+    return dict(VALID, sleep_hours_last_night=sleep)
+
+
+class ComparisonRigTestCase(RigTestCase):
+    def ready(self, **cfg):
+        return self.rig(**cfg).become_ready()
+
+    def settle(self, r):
+        r.answer()
+        r.pump()
+
+    def occupancy(self, r):
+        diag = r.diag()
+        return diag["active"], diag["queued"]
+
+    def counters(self, r):
+        return collections.Counter(r.diag()["counters"])
+
+    def error(self, r, code, subtype=None):
+        message = {"t": "error", "gen": r.h.generation, "id": r.h.sent[-1]["id"], "code": code}
+        if subtype:
+            message["subtype"] = subtype
+        r.h.push(("message", message))
+        r.pump()
+
+
+class ComparisonAdmissionTests(ComparisonRigTestCase):
+    def test_idle_pair_reserves_one_and_queues_one_with_a_shared_deadline(self):
+        r = self.ready()
+        r.clock.advance(3.0)
+        first, second = r.d.submit_comparison(ORIGINAL, MODIFIED)
+        self.assertEqual((first.state, second.state, self.occupancy(r)), (d.RESERVED, d.QUEUED, (1, 1)))
+        self.assertEqual((first.admitted_at, first.deadline), (second.admitted_at, second.deadline))
+        self.assertEqual((first.admitted_at, first.deadline), (3.0, 3.5))
+        self.assertEqual((first.payload["sleep_hours_last_night"], second.payload["sleep_hours_last_night"]),
+                         (7.0, 6.0))
+        self.assertTrue(0 < first.req_id < second.req_id)
+        c = self.counters(r)
+        self.assertEqual((c["admitted"], c["comparison_requests_admitted"], c["comparison_evaluations_admitted"]),
+                         (2, 1, 2))
+        r.pump()
+        self.assertEqual([m["id"] for m in r.h.sent], [first.req_id])
+        self.settle(r)
+        self.assertEqual([m["id"] for m in r.h.sent], [first.req_id, second.req_id])
+        self.settle(r)
+        self.assertEqual((self.occupancy(r), self.counters(r)["completed"]), ((0, 0), 2))
+
+    def test_pair_behind_active_work_is_queued_in_order(self):
+        r = self.ready()
+        ahead = r.d.submit(marker(5.5))
+        r.pump()
+        first, second = r.d.submit_comparison(ORIGINAL, MODIFIED)
+        self.assertEqual((first.state, second.state, self.occupancy(r)), (d.QUEUED, d.QUEUED, (1, 2)))
+        self.assertEqual(list(r.d._queue), [first, second])
+        self.assertFalse(ahead.future.done())
+
+    def test_occupancy_boundaries_both_or_neither(self):
+        for occupied, accepted in ((7, True), (8, False), (9, False)):
+            with self.subTest(occupied=occupied):
+                r = self.ready()
+                for _ in range(occupied):
+                    r.d.submit(VALID)
+                before = (self.occupancy(r), list(r.d._queue), r.d._active)
+                if accepted:
+                    jobs = r.d.submit_comparison(ORIGINAL, MODIFIED)
+                    self.assertEqual((len(jobs), self.occupancy(r)), (2, (1, 8)))
+                else:
+                    with self.assertRaises(d.AdmissionRejected) as caught:
+                        r.d.submit_comparison(ORIGINAL, MODIFIED)
+                    self.assertEqual(caught.exception.code, d.CODE_OVERLOADED)
+                    self.assertEqual((self.occupancy(r), list(r.d._queue), r.d._active), before)
+                    c = self.counters(r)
+                    self.assertEqual((c["admitted"], c["comparison_requests_rejected_overloaded"],
+                                      c["comparison_requests_admitted"], c["comparison_evaluations_admitted"],
+                                      c["rejected_overloaded"]), (occupied, 1, 0, 0, 0))
+                diag = r.diag()
+                self.assertEqual(diag["invariant_violations"], 0)
+                self.assertLessEqual(diag["high_water"]["admitted"], 9)
+                self.assertLessEqual(diag["high_water"]["queued"], 8)
+
+    def test_identical_validated_inputs_use_one_slot(self):
+        for other in (dict(ORIGINAL), dict(ORIGINAL, sleep_hours_last_night=7, resting_hr_morning=50),
+                      dict(ORIGINAL)):
+            r = self.ready()
+            jobs = r.d.submit_comparison(ORIGINAL, other)
+            c = self.counters(r)
+            self.assertEqual((len(jobs), self.occupancy(r), c["admitted"], c["comparison_requests_admitted"],
+                              c["comparison_evaluations_admitted"]), (1, (1, 0), 1, 1, 1))
+        r = self.ready()
+        zero = dict(ORIGINAL, soreness_score_evening=0.0)
+        self.assertEqual(len(r.d.submit_comparison(zero, dict(zero, soreness_score_evening=-0.0))), 1)
+        nearly = dict(ORIGINAL, sleep_hours_last_night=7.000000000000001)
+        self.assertEqual(len(r.d.submit_comparison(ORIGINAL, nearly)), 2)  # exact comparison, no tolerance
+
+    def test_identical_pair_needs_only_one_free_slot_and_requires_readiness(self):
+        r = self.ready()
+        for _ in range(8):
+            r.d.submit(VALID)
+        self.assertEqual(len(r.d.submit_comparison(ORIGINAL, ORIGINAL)), 1)
+        with self.assertRaises(d.AdmissionRejected):
+            r.d.submit_comparison(ORIGINAL, ORIGINAL)
+        idle = self.rig()
+        for pair in ((ORIGINAL, ORIGINAL), (ORIGINAL, MODIFIED)):
+            with self.assertRaises(d.AdmissionRejected) as caught:
+                idle.d.submit_comparison(*pair)
+            self.assertEqual(caught.exception.code, d.CODE_UNAVAILABLE)
+        c = self.counters(idle)
+        self.assertEqual((c["comparison_requests_rejected_unavailable"], c["rejected_unavailable"], c["admitted"]),
+                         (2, 0, 0))
+
+    def test_both_inputs_are_validated_before_any_capacity(self):
+        r = self.ready()
+        for pair, error in (
+            ((ORIGINAL, dict(MODIFIED, prior_injury=True)), InvalidExplanationInput),
+            ((dict(ORIGINAL, prior_injury=0.0), MODIFIED), InvalidExplanationInput),
+            ((ORIGINAL, dict(MODIFIED, weekly_km_to_date=19.0)), OutsideExplanationDomain),
+            ((dict(ORIGINAL, weekly_km_to_date=19.0), MODIFIED), OutsideExplanationDomain),
+        ):
+            with self.subTest(pair=pair), self.assertRaises(error):
+                r.d.submit_comparison(*pair)
+            self.assertEqual((self.occupancy(r), sum(self.counters(r)[k] for k in (
+                "admitted", "comparison_requests_admitted", "comparison_requests_rejected_overloaded"))), ((0, 0), 0))
+
+    def test_interleaved_submissions_keep_fifo_order(self):
+        r = self.ready()
+        jobs = [r.d.submit(marker(5.5)), *r.d.submit_comparison(marker(5.6), marker(5.7)), r.d.submit(marker(5.8)),
+                *r.d.submit_comparison(marker(5.9), marker(6.0))]
+        for _ in jobs:
+            r.pump()
+            self.settle(r)
+        self.assertEqual([m["payload"]["sleep_hours_last_night"] for m in r.h.sent],
+                         [5.5, 5.6, 5.7, 5.8, 5.9, 6.0])
+        ids = [m["id"] for m in r.h.sent]
+        self.assertEqual(len(set(ids)), 6)
+        self.assertEqual([j.req_id for j in jobs], ids)  # each message belongs to its own job
+
+    def test_concurrent_single_and_pair_admission_races(self):
+        for trial in range(40):
+            r = self.ready()
+            barrier, accepted, lock = threading.Barrier(12), [], threading.Lock()
+
+            def submit(index):
+                barrier.wait()
+                try:
+                    jobs = (r.d.submit_comparison(marker(5.5 + index / 100), marker(7.0 + index / 100))
+                            if index % 2 else (r.d.submit(VALID),))
+                except d.AdmissionRejected:
+                    return
+                with lock:
+                    accepted.append(jobs)
+
+            threads = [threading.Thread(target=submit, args=(i,)) for i in range(12)]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join(10)
+            order = [r.d._active, *r.d._queue]
+            total = sum(len(jobs) for jobs in accepted)
+            self.assertEqual((len(order), r.diag()["invariant_violations"]), (total, 0))
+            self.assertTrue(8 <= total <= 9, total)  # a pair cannot take the last single slot
+            for jobs in accepted:
+                if len(jobs) == 2:
+                    self.assertEqual(order.index(jobs[1]), order.index(jobs[0]) + 1)
+            ids = [j.req_id for jobs in accepted for j in jobs if j.req_id]
+            self.assertEqual(len(ids), len(set(ids)))
+            c = self.counters(r)
+            pairs = sum(len(jobs) == 2 for jobs in accepted)
+            self.assertEqual((c["admitted"], c["comparison_requests_admitted"]), (total, pairs))
+            self.assertEqual(c["comparison_requests_rejected_overloaded"], 6 - pairs)
+
+    def test_failed_allocation_or_append_leaves_no_partial_reservation(self):
+        class FailingDeque(collections.deque):
+            def extend(self, items):
+                self.append(next(iter(items)))
+                raise MemoryError("injected")
+
+        def second_call_fails(real):
+            calls = []
+
+            def wrapper(*args, **kwargs):
+                calls.append(1)
+                if len(calls) == 2:
+                    raise MemoryError("injected")
+                return real(*args, **kwargs)
+
+            return wrapper
+
+        for kind in ("job", "id", "append_idle", "append_busy"):
+            with self.subTest(kind=kind):
+                r = self.ready()
+                if kind == "append_busy":
+                    r.d.submit(VALID)
+                before = (self.occupancy(r), r.d._active, self.counters(r))
+                if kind == "job":
+                    with mock.patch.object(d, "Job", second_call_fails(d.Job)), self.assertRaises(MemoryError):
+                        r.d.submit_comparison(ORIGINAL, MODIFIED)
+                elif kind == "id":
+                    real_ids = r.d._ids
+                    step = second_call_fails(lambda: next(real_ids))
+                    r.d._ids = iter(step, None)
+                    with self.assertRaises(MemoryError):
+                        r.d.submit_comparison(ORIGINAL, MODIFIED)
+                    r.d._ids = real_ids
+                else:
+                    plain_queue = r.d._queue
+                    r.d._queue = FailingDeque(plain_queue)
+                    with self.assertRaises(MemoryError):
+                        r.d.submit_comparison(ORIGINAL, MODIFIED)
+                    r.d._queue = collections.deque(r.d._queue)
+                self.assertEqual((self.occupancy(r), r.d._active, self.counters(r)), before)
+                self.assertEqual(len(r.d.submit_comparison(ORIGINAL, MODIFIED)), 2)  # still fully usable
+                self.assertEqual(r.diag()["invariant_violations"], 0)
+
+
+class ComparisonLifecycleTests(ComparisonRigTestCase):
+    def pair(self, **cfg):
+        r = self.ready(**cfg)
+        first, second = r.d.submit_comparison(ORIGINAL, MODIFIED)
+        r.pump()
+        return r, first, second
+
+    def replacement_ready(self, r):
+        r.pump()
+        r.h.push(("message", ready_message(r.h.generation)))
+        r.pump()
+        self.assertEqual(r.diag()["state"], d.READY)
+
+    def test_original_failure_leaves_the_queued_sibling_cancellable_exactly_once(self):
+        r, first, second = self.pair()
+        r.h.push(("message", {"t": "error", "gen": 1, "id": first.req_id, "code": w.CODE_NUMERICAL,
+                              "subtype": w.SUBTYPE_GATE}))
+        r.d.pump(max_steps=1)
+        self.assertEqual((first.future.result(0).code, first.future.result(0).generation), (d.CODE_NUMERICAL, None))
+        self.assertFalse(second.future.done())
+        self.assertEqual((r.d.cancel(second), r.d.cancel(second)), (True, False))
+        r.pump()
+        self.assertEqual((self.occupancy(r), len(r.h.sent), self.counters(r)["cancelled_queued"]), ((0, 0), 1, 1))
+
+    def test_original_worker_failure_drains_the_sibling_first_and_never_resubmits_it(self):
+        r, first, second = self.pair()
+        order = []
+        first.future.add_done_callback(lambda _f: order.append("original"))
+        second.future.add_done_callback(lambda _f: order.append("modified"))
+        r.clock.advance(0.25)  # the original's execution limit
+        r.pump()
+        self.assertEqual(order, ["modified", "original"])  # completion order is not failure order
+        self.assertEqual((first.future.result(0).code, second.future.result(0).code),
+                         (d.CODE_DEADLINE, d.CODE_UNAVAILABLE))
+        self.replacement_ready(r)
+        self.assertEqual((r.h.generation, r.h.sent, self.occupancy(r)), (2, [], (0, 0)))
+
+    def test_modified_failure_after_original_success(self):
+        r, first, second = self.pair()
+        self.settle(r)
+        self.error(r, w.CODE_NUMERICAL, w.SUBTYPE_GATE)
+        self.assertEqual((first.future.result(0).kind, first.future.result(0).generation), ("result", 1))
+        self.assertEqual((second.future.result(0).code, second.future.result(0).generation), (d.CODE_NUMERICAL, None))
+        self.assertEqual(self.occupancy(r), (0, 0))
+
+    def test_worker_failure_between_evaluations_prevents_a_second_success(self):
+        for stage in ("send_fails", "dies_while_executing"):
+            with self.subTest(stage=stage):
+                r, first, second = self.pair()
+                r.answer()
+                if stage == "send_fails":
+                    r.h.send_error = "closed"
+                else:
+                    r.h.push(("closed", "exited"))
+                r.pump()
+                self.assertEqual(first.future.result(0).generation, 1)
+                self.assertEqual((second.future.result(0).kind, second.future.result(0).code),
+                                 ("error", d.CODE_UNAVAILABLE))
+                self.replacement_ready(r)
+                self.assertEqual((r.h.generation, r.h.sent), (2, []))
+                again = r.d.submit_comparison(ORIGINAL, MODIFIED)
+                for _ in again:
+                    r.pump()
+                    self.settle(r)
+                self.assertEqual([j.future.result(0).generation for j in again], [2, 2])
+
+    def test_stale_generation_and_wrong_id_results_are_never_accepted(self):
+        r, first, second = self.pair()
+        r.answer(gen=0)
+        r.pump()
+        self.assertFalse(first.future.done())
+        self.assertEqual(self.counters(r)["stale_ignored"], 1)
+        r.h.push(("message", {"t": "result", "gen": 1, "id": second.req_id, "explanation": explanation()}))
+        r.pump()
+        self.assertEqual({j.future.result(0).kind for j in (first, second)}, {"error"})
+        self.assertEqual(self.counters(r)["failure:protocol_mismatch"], 1)
+
+    def test_shared_deadline_expires_in_the_queue_at_equality(self):
+        r = self.ready(exec_timeout=5.0)
+        first, second = r.d.submit_comparison(ORIGINAL, MODIFIED)
+        r.pump()
+        r.clock.t = first.deadline  # the original's reply is already waiting when the deadline is reached
+        self.settle(r)
+        self.assertEqual((second.future.result(0).code, len(r.h.sent), self.occupancy(r)),
+                         (d.CODE_DEADLINE, 1, (0, 0)))
+        self.assertEqual(self.counters(r)["expired_queued"], 1)
+
+    def test_shared_deadline_expires_while_each_evaluation_executes(self):
+        for stage in ("original", "modified"):
+            with self.subTest(stage=stage):
+                r, first, second = self.pair(exec_timeout=5.0)
+                if stage == "modified":
+                    r.clock.advance(0.25)
+                    self.settle(r)
+                    self.assertEqual((second.state, second.deadline, second.exec_deadline),
+                                     (d.EXECUTING, first.deadline, first.deadline))  # no new deadline
+                r.clock.t = first.deadline
+                r.pump()
+                self.assertEqual(second.future.result(0).code, d.CODE_DEADLINE)
+                if stage == "original":
+                    self.assertEqual(first.future.result(0).code, d.CODE_DEADLINE)
+
+    def test_second_evaluation_keeps_the_execution_limit_and_dispatch_budget(self):
+        r, first, second = self.pair()
+        r.clock.advance(0.125)
+        self.settle(r)
+        self.assertEqual(second.exec_deadline, min(second.deadline, 0.125 + 0.25))
+        for used, dispatched in ((0.44, True), (0.4625, False)):
+            with self.subTest(used=used):
+                r = self.ready(exec_timeout=5.0)
+                first, second = r.d.submit_comparison(ORIGINAL, MODIFIED)
+                r.pump()
+                r.clock.t = used
+                self.settle(r)
+                self.assertEqual(len(r.h.sent), 2 if dispatched else 1)
+                if not dispatched:
+                    self.assertEqual(second.future.result(0).code, d.CODE_DEADLINE)
+                    self.assertEqual(self.counters(r)["expired_before_dispatch"], 1)
+
+    def test_cancel_reserved_pair_sends_nothing(self):
+        r = self.ready()
+        first, second = r.d.submit_comparison(ORIGINAL, MODIFIED)
+        self.assertTrue(r.d.cancel(second))
+        self.assertTrue(r.d.cancel(first))
+        r.pump()
+        self.assertEqual((r.h.sent, self.occupancy(r)), ([], (0, 0)))
+
+    def test_cancel_queued_then_active_keeps_the_slot_until_the_worker_answers(self):
+        r, first, second = self.pair()
+        self.assertTrue(r.d.cancel(second))
+        self.assertTrue(r.d.cancel(first))
+        self.assertEqual((self.occupancy(r), r.d._active), ((1, 0), first))
+        self.assertEqual((r.d.cancel(first), r.d.cancel(second)), (False, False))
+        self.settle(r)
+        c = self.counters(r)
+        self.assertEqual((self.occupancy(r), len(r.h.sent), c["cancelled_queued"], c["cancelled_active"],
+                          c["completed"]), ((0, 0), 1, 1, 1, 1))
+
+    def test_cancel_active_second_evaluation(self):
+        r, first, second = self.pair()
+        self.settle(r)
+        self.assertTrue(r.d.cancel(second))
+        self.assertEqual(self.occupancy(r), (1, 0))
+        self.settle(r)
+        self.assertEqual((self.occupancy(r), self.counters(r)["cancelled_active"]), ((0, 0), 1))
+        self.assertTrue(first.future.done() and second.future.cancelled())
+
+    def test_shutdown_with_an_admitted_pair(self):
+        r, first, second = self.pair()
+        r.d.shutdown()
+        self.assertEqual(second.future.result(0).code, d.CODE_UNAVAILABLE)
+        r.answer()
+        r.pump()
+        self.assertEqual((r.diag()["state"], self.occupancy(r), len(r.h.sent)), (d.STOPPED, (0, 0), 1))
+        self.assertTrue(first.future.done() and second.future.done())
+        self.assertEqual(first.future.result(0).generation, 1)  # drained work succeeded; sibling did not
+
+    def test_repeated_pairs_leave_no_unresolved_futures_or_slots(self):
+        r = self.ready()
+        jobs = []
+        for index in range(30):
+            pair = r.d.submit_comparison(ORIGINAL, MODIFIED)
+            jobs += pair
+            if index % 3 == 0:
+                for job in reversed(pair):
+                    r.d.cancel(job)
+                r.pump()
+                if r.d._active is not None:
+                    self.settle(r)
+            else:
+                for _ in pair:
+                    r.pump()
+                    self.settle(r)
+        self.assertTrue(all(j.future.done() for j in jobs))
+        c = self.counters(r)
+        self.assertEqual((self.occupancy(r), c["admitted"], r.diag()["invariant_violations"]), ((0, 0), 60, 0))
 
 
 if __name__ == "__main__":

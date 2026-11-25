@@ -1,0 +1,590 @@
+{
+ "schema_version": "level8-comparison-verification/1",
+ "milestone": "L8-3 deterministic scenario comparison",
+ "approved_parent_commit": "b153a85d80b6d983e2e5e65088c7e3f1760e8d7f",
+ "milestone_disposition": {
+  "status": "IMPLEMENTATION COMPLETE - RESTRICTED DEVELOPMENT-ONLY SCOPE",
+  "effective_only_with_the_approved_local_commit": true,
+  "technical_correctness": "PASS within the tested development-only scope",
+  "note": "This is not a statement that every historical checkpoint gate passed. L8-3D and L8-3DI remain FAIL overall. Full operational acceptance remains FAIL."
+ },
+ "candidate_sha256": {
+  "src/level8_dispatch.py": "b8a4ece08bcedb4c84c89f4fcd1987071d72bf04baca92b9670d39e884b85b09",
+  "src/level8_service.py": "4c4bfb7bfcae7d5a971b2cf49083202baaa236bd4db595d6da0e4cce7bee691b",
+  "tests/test_level8_dispatch.py": "76ed167d63378e94ef656dbcf5e690c4c5876b404c00c7589150ec86b6ac0f3a",
+  "tests/test_level8_api.py": "1d6b19d6a8afb585fef15341ce58aacb88a862ba924e39484a1dad92ea4681f9",
+  "tests/test_level8_image.py": "335afa940a1c21d487850859fcafd58982d2c7555925371598e061d9d3e9dc5f",
+  "src/level8_compare.py": "2a09e82d14842169731a767f2e834cf7915191a916bb6b15545a2910d1dce571",
+  "tests/test_level8_compare.py": "e8cea1d48dcdb2749280580df248d842097cbe55921a4b234788e54288660941",
+  "tests/frozen_isolated.py": "c695911da1be08aa58a1a34792874cd53917071d7c1b6881ac596c11f2c19e97",
+  "tests/test_frozen_isolated.py": "d25abe4191897172a0e66df65f3f74d894f58c483ccc13c557ba0fc567482674"
+ },
+ "evidence_basis": {
+  "sources": "Submitted checkpoint reports and the executing session's records. No suite was rerun and no private archive was opened or re-verified while preparing this document.",
+  "kinds": {
+   "retained_test_output": "Held in the private archives listed under private_evidence (L8-3D, L8-3DI, L8-3DIV only); not re-read here.",
+   "submitted_reports": "Test counts and results for L8-3B and L8-3C rest on submitted reports and session records; no separate L8-3B/C evidence archive was created.",
+   "reconstructed_accounting": "Guard-run, mount and preservation-hash counts are reconstructed from commands, code and session records, not from file-access monitoring.",
+   "reviewed_decisions": "Recorded under checkpoints[].reviewed.",
+   "unresolved": "Recorded under limitations, historical_access and technical_debt."
+  }
+ },
+ "verification_scope": {
+  "in_scope": "Synthetic-input correctness of comparison, admission, API, flat temporary layout, a dataset-isolated verifier on synthetic files, and a hash check of four staged serving artifacts.",
+  "out_of_scope": [
+   "operational or performance acceptance",
+   "mixed-load comparison performance",
+   "production packaging",
+   "model generalization",
+   "medical validity",
+   "dataset content integrity",
+   "Linux behaviour of the isolated verifier"
+  ]
+ },
+ "architecture_and_contract": {
+  "endpoint": "POST /v1/comparisons",
+  "response_schema": "comparison.v1",
+  "api_paths": [
+   "GET /health",
+   "POST /predict",
+   "POST /v1/explanations",
+   "POST /v1/comparisons"
+  ],
+  "route_note": "An earlier authorization named /v1/predict. The existing route is /predict; it is unchanged and no alias was added.",
+  "request": {
+   "form": "two complete strict scenario objects, original and modified, each the existing Level 7 PredictionRequest",
+   "max_body_bytes": 4096,
+   "media_type": "uncompressed application/json (optional charset=utf-8)",
+   "rejections": {
+    "unsupported_media_type": 415,
+    "comparison_request_too_large": 413,
+    "duplicate_json_key": 422,
+    "malformed_comparison_json": 422,
+    "invalid_comparison_request": 422,
+    "outside_explanation_domain": 422
+   },
+   "errors_echo_client_text": false
+  },
+  "admission": {
+   "domain_validation_before_admission": "both scenarios; violations original first, then modified, in fixed feature order",
+   "identical_validated_scenarios": "one evaluation, used for both sides; nothing cached",
+   "distinct_scenarios": "two evaluations admitted atomically (both or neither), adjacent in FIFO order",
+   "capacity": {
+    "active": 1,
+    "waiting": 8,
+    "admitted": 9,
+    "unit": "evaluation"
+   },
+   "shared_admission_deadline_ms": 500,
+   "per_evaluation_execution_limit_ms": 250,
+   "minimum_dispatch_budget": {
+    "rule": "not dispatched when (deadline - now) < 0.050 in binary floating point",
+    "note": "at nominal clock 0.45 with deadline 0.5 the remainder is 0.04999999999999999 and the job is not dispatched"
+   },
+   "expiry_at_equality": true
+  },
+  "generation": {
+   "rule": "both successful outcomes must carry the same integer worker generation, recorded from the handle that returned each result",
+   "cross_generation_resubmission": false,
+   "worker_metadata_generation_bound": false
+  },
+  "failure_and_cancellation": {
+   "all_or_nothing": true,
+   "selection_order": "by scenario, not completion: original error; else wait for original even if modified failed; else modified error; else success",
+   "precedence_when_undecided": "client disconnect (internal 499), then shared deadline (504)",
+   "modified_fails_first": "the original is not cancelled until it resolves or the shared deadline passes",
+   "cancellation": "unfinished jobs cancelled, modified first; client cancellation keeps an active slot until the worker finishes or is confirmed stopped",
+   "operational_errors": {
+    "explanation_overloaded": {
+     "status": 503,
+     "retry_after": 1
+    },
+    "explanation_unavailable": {
+     "status": 503,
+     "retry_after": 5
+    },
+    "explanation_numerical_check_failed": {
+     "status": 503
+    },
+    "explanation_deadline_exceeded": {
+     "status": 504
+    }
+   },
+   "comparison_consistency_failure_maps_to": "explanation_unavailable",
+   "handler_responses_cache_control": "no-store",
+   "worker_failure_slot_accounting": "Accepted existing behaviour: on worker failure the active-slot counter drops before termination is confirmed, while admission and replacement stay blocked until safe. The counter is not a complete measure of process ownership."
+  },
+  "response_construction": "each side through the existing build_response path, then the comparison builder; no inference in the API parent",
+  "differences": {
+   "convention": "modified minus original",
+   "feature_order": [
+    "weekly_km_to_date",
+    "sleep_hours_last_night",
+    "resting_hr_morning",
+    "soreness_score_evening",
+    "prior_injury"
+   ],
+   "percentage_point_field": false
+  },
+  "interpretation": {
+   "policy_version": "comparison-interpretation.v1",
+   "materiality_threshold_logit": 0.02,
+   "negligible_when": "abs(value) <= 0.02",
+   "directions": [
+    "toward_class_1",
+    "toward_class_0",
+    "negligible"
+   ],
+   "ranking": "material attribution differences by descending magnitude; exact ties by feature order",
+   "decision_transitions": [
+    "unchanged_0",
+    "unchanged_1",
+    "0_to_1",
+    "1_to_0"
+   ],
+   "notices": "nine existing explanation notices plus four fixed comparison notices; development-only and noncausal; no advice",
+   "baseline": "B0 (development-mean, zero standardized vector); the model scores B0 itself in class 1"
+  },
+  "completeness_of_difference": {
+   "relationship": "sum(attribution differences) = logit difference + modified residual - original residual",
+   "tolerance": "existing 1e-9 closeness rule",
+   "bound": "abs(residual) <= sum of both allowed residuals (+1e-9)",
+   "does_not_establish": "per-feature accuracy"
+  }
+ },
+ "technical_results": {
+  "L8_3B": {
+   "basis": "submitted report",
+   "new_comparison_tests": {
+    "ran": 56,
+    "passed": 56,
+    "runs": 2
+   },
+   "engine_tests": {
+    "ran": 32,
+    "passed": 30,
+    "skipped": 2
+   },
+   "api_tests": {
+    "ran": 47,
+    "passed": 47
+   },
+   "numerical_pairs": {
+    "passed": 26,
+    "total": 26
+   },
+   "fixture_matrix_sha256": "adcbe9e25b67f0a9f4e4315358f191643fd8619848e1ed5bb155305421c74784"
+  },
+  "L8_3C": {
+   "basis": "submitted report",
+   "integration_contract_sha256": "af6d06dff9cb4196d4abb89741b75a4883c3f42cf8eb4a6306ca876a75bb9c42",
+   "final": {
+    "dispatcher": "84 passed",
+    "worker": "39 passed",
+    "api": "89 passed",
+    "comparison": "56 passed",
+    "engine": "30 passed, 2 skipped",
+    "targeted_flat_image_module": "7 passed"
+   },
+   "real_worker_matrix": "five frozen comparisons matched separate explanations; a controlled kill between evaluations returned 503, with no resubmission; recovery succeeded in the next generation",
+   "failed_attempts": [
+    "first API run 87 of 88: one new test wrongly expected parser rejection of deeply nested valid JSON",
+    "an aborted edit caused an unintended rerun with the same failure",
+    "a before/after hash comparison was invalid because both hash commands failed"
+   ]
+  },
+  "L8_3D": {
+   "basis": "submitted report; retained output in the L8-3D archive",
+   "plan_sha256": "960be849978bf0385d074959a11aadf6fc78b20993e977d4753e1d0e9e6fb801",
+   "repository_regression": {
+    "discovered": 386,
+    "passed": 374,
+    "skipped": 12,
+    "failed": 0,
+    "skips": {
+     "level7_bundle_repository_layout": 3,
+     "flat_image_module_repository_layout": 7,
+     "engine_opt_ins_latency_and_evidence_output": 2
+    },
+    "skip_note": "the 3 bundle and 7 flat-image tests passed in the flat layout; the 2 engine opt-ins never ran",
+    "excluded_modules": "eight earlier-level data and training modules"
+   },
+   "flat_image_regression": {
+    "discovered": 43,
+    "passed": 37,
+    "skipped": 6,
+    "skip_note": "need repository sources or Dockerfile; passed in the repository run"
+   },
+   "numerical_comparison_matrix": {
+    "passed": 26,
+    "total": 26,
+    "pair_decisions": {
+     "0_to_1": 8,
+     "1_to_0": 8,
+     "unchanged_1": 9,
+     "unchanged_0": 1
+    },
+    "identical_pairs_exact_zero": true
+   },
+   "individual_explanation_gates": [
+    "per-feature error <= 0.005 against the exact piecewise-linear oracle",
+    "relative L1 error <= 0.005",
+    "probability agreement <= 2e-6",
+    "completeness residual within the allowed value",
+    "sign and top-feature checks of the existing engine gates"
+   ],
+   "comparison_oracle_gates": [
+    "per-feature difference error <= 0.01 logit",
+    "signed residual relationship within 1e-9",
+    "combined residual bound",
+    "model and baseline consistency"
+   ],
+   "worst_observed": {
+    "individual_feature_error": {
+     "observed": 0.0005483010169500258,
+     "limit": 0.005
+    },
+    "individual_relative_l1": {
+     "observed": 0.0004708976717097633,
+     "limit": 0.005
+    },
+    "probability_logit_parity": {
+     "observed": 7.723044237462062e-08,
+     "limit": 2e-06
+    },
+    "individual_residual_over_allowed": {
+     "observed": 0.3421221547047762,
+     "limit": 1.0
+    },
+    "pair_feature_error": {
+     "observed": 0.0007231956202433665,
+     "limit": 0.01
+    },
+    "pair_residual_over_bound": {
+     "observed": 0.10114380686649346,
+     "limit": 1.0
+    },
+    "pair_residual_relationship_error": {
+     "observed": 0.0,
+     "limit": 1e-09
+    }
+   },
+   "endpoint_compatibility_requests": {
+    "equal": 33,
+    "total": 33,
+    "also_equal": "existing operation schemas, 17 referenced components and app metadata"
+   },
+   "openapi_references": {
+    "resolved": 48,
+    "total": 48
+   },
+   "flat_image_inventory": {
+    "matched": 14,
+    "total": 14
+   },
+   "candidate_hashes": {
+    "files": 7,
+    "matched_before_and_after": true
+   },
+   "committed_test_failures_reported": 0,
+   "frozen_guard_runs": 1,
+   "scratch_corrections": [
+    "two targeted scripts first failed for lack of a __main__ guard and were rerun once each",
+    "final cleanup checks stopped three times for check-script defects; three resource checks that could not fail were replaced"
+   ]
+  },
+  "limits": "Results apply to the tested inputs and environment. They are not exhaustive and do not establish universal per-request numerical accuracy."
+ },
+ "isolated_verifier": {
+  "files": [
+   "tests/frozen_isolated.py",
+   "tests/test_frozen_isolated.py"
+  ],
+  "implementation": "Python standard library",
+  "tested_with": "native Python 3.15.1 on macOS",
+  "synthetic_tests": {
+   "passed": 63,
+   "total": 63,
+   "final_failures": 0,
+   "final_skips": 0
+  },
+  "deliberate_mutations": {
+   "detected": 7,
+   "total": 7
+  },
+  "contract_sha256": "57323f76cf33bdf5a07e3f54e8a0233d13171ac5228f04b60884e40c008a4200",
+  "properties": [
+   "explicit positive classification",
+   "pinned inventory and classification inputs",
+   "descriptor-based no-follow hashing of the validated file",
+   "complete result accounting",
+   "explicit exclusion reporting"
+  ],
+  "limitations": [
+   "A hardlink substituted between check and open can cause the other file to be opened before rejection; the controlled test showed it is rejected before it is read.",
+   "The Python test monitor does not intercept every native access mechanism.",
+   "Already-open descriptors and directory-relative opens have monitoring limitations.",
+   "The verifier does not enforce the complete staging inventory; a regular copy placed at an approved path would be read.",
+   "Physical exclusion of prohibited files is the primary protection.",
+   "Linux compatibility: NOT VERIFIED.",
+   "It is not a comprehensive security sandbox."
+  ]
+ },
+ "restricted_real_artifact_verification": {
+  "checkpoint": "L8-3DIV",
+  "result": "PASS (limited to four staged serving artifacts)",
+  "plan_sha256": "49a6acea2f8fe90b2c54100b88e9260fe0402a8033c68307bc478d8c22dfe0f9",
+  "staged_regular_files": 6,
+  "approved_artifacts_verified": 4,
+  "historical_inventory_unchanged": true,
+  "historical_inventory_sha256": "7576dc779e8fa5bd4e8f76e06697f9f2c546129f4a16c4b69043bf7bde7c67d4",
+  "classification_file": "verification/level8/frozen_classification.json",
+  "classification_sha256": "0bbab2fd21674ca281827dd8986649f27845009994fe2d261da43ef7188a4a9f",
+  "classification_use": "An input to a controlled staging procedure. It is not permission to run the verifier against the repository root or to broaden access.",
+  "primary_executions": 1,
+  "exit_status": 0,
+  "independent_checks": {
+   "passed": 20,
+   "total": 20
+  },
+  "unique_inventory_results": 37,
+  "result_counts": {
+   "VERIFIED": 4,
+   "EXCLUDED_PENDING_CLASSIFICATION": 30,
+   "EXCLUDED_DATASET": 3
+  },
+  "unexpected_results": 0,
+  "consumed_holdout_excluded_outside_inventory": "data/v1/processed/test.csv",
+  "verified_artifact_sha256": {
+   "artifacts/v4/level6_preprocessor.json": "d59626ec299ed8389a43b41ba2d0a70b55d66652aede7792bf99d8e219a9caa9",
+   "artifacts/v4/level6_selected_model.pt": "ad5d50467e39e809aa49f1a6778f270072e6ca09e8ea3baa22b28cd0c5bb9bfb",
+   "artifacts/v4/level7_deploy_handoff.json": "e498bf697174c58e2c8fc341622c5f4deafc58fd4c8111b0adac6194be66a952",
+   "serving-manifest.json": "67f3bbb3cd892621fcab07e80cd401b3c732c6a5e3e4270badb54c00c3d139ca"
+  },
+  "dataset_content_integrity": "NOT VERIFIED",
+  "equivalent_to_full_guard": false,
+  "other_inventory_entries_verified": 0,
+  "other_inventory_entries_total": 33,
+  "applies_to": "the staged copies verified during L8-3DIV",
+  "system_level_access_monitoring": false,
+  "staging_removed": true
+ },
+ "checkpoints": [
+  {
+   "id": "L8-3A",
+   "original": "architecture report",
+   "reviewed": "architecture accepted"
+  },
+  {
+   "id": "L8-3B",
+   "original": "technical PASS",
+   "reviewed": "technical PASS, with access violations disclosed later"
+  },
+  {
+   "id": "L8-3C",
+   "original": "technical PASS",
+   "reviewed": "technical PASS, with access violations disclosed later"
+  },
+  {
+   "id": "L8-3D",
+   "original": "technical PASS (reported overall PASS)",
+   "reviewed": "overall FAIL (dataset-access protocol)"
+  },
+  {
+   "id": "L8-3DV",
+   "original": "reconciliation and corrective design",
+   "reviewed": "PASS"
+  },
+  {
+   "id": "L8-3DI",
+   "original": "synthetic technical PASS (reported PASS)",
+   "reviewed": "overall FAIL (inventory files hashed before classification approval)"
+  },
+  {
+   "id": "L8-3DIV",
+   "original": "restricted real-artifact verification PASS",
+   "reviewed": "PASS"
+  }
+ ],
+ "historical_access": {
+  "earlier_holdout_breach": "During L8-2DSV a repository-root recursive content search did not exclude data/; holdout content access is presumed from the command's behaviour. By the same behaviour its scope included other files under data/. The existing record stands.",
+  "authorization_conflict": "Some instructions required the strict frozen-file guard while prohibiting training-data access. The guard requirement was not an exception; the correct action was to stop and ask. This was not raised in L8-3B/C, and in L8-3D the assistant wrongly treated the guard as an exception.",
+  "frozen_guard_runs": {
+   "documented_at_least": 19,
+   "implied_dataset_hash_operations_at_least": 57,
+   "breakdown": {
+    "L8-3B": 2,
+    "L8-3C": 3,
+    "L8-3D": 1,
+    "L8-2DSV": 4,
+    "L8-2DS_and_DSV_evidence_commit": 1,
+    "L8-2DA": 4,
+    "L8-2DAV": 3,
+    "L8-2DA_and_DAV_evidence_commit": 1
+   },
+   "additional_suggested_not_counted": 2,
+   "datasets": [
+    "data/v1/raw/run_readiness_observations.csv",
+    "data/v1/cleaned/run_readiness_observations.csv",
+    "data/v1/processed/train.csv"
+   ],
+   "basis": "session records plus guard code and passing strict results; not file-access monitoring; only L8-3D retains a guard output file"
+  },
+  "dataset_mounts": {
+   "checkpoints": [
+    "L8-2DA",
+    "L8-3B",
+    "L8-3C"
+   ],
+   "detail": [
+    "L8-3B and L8-3C test containers mounted the repository root with only the holdout and train.csv covered (raw and cleaned mounted).",
+    "L8-2DA serial-latency and Level 8 regression containers did the same; its Level 7 suite covered only the holdout.",
+    "Reads by test processes through those mounts are neither demonstrated nor excluded."
+   ]
+  },
+  "level3_evaluation_files": {
+   "confirmed_access": "the guard hashed these three files in passing strict runs and parsed the evaluation JSON",
+   "paths": [
+    "reports/v1/level3_errors.csv",
+    "reports/v1/level3_evaluation.json",
+    "reports/v1/level3_evaluation.md"
+   ],
+   "holds_holdout_derived_observations": "NOT VERIFIED"
+  },
+  "possible_holdout_derived_exposure": "through upstream or derived files: NOT VERIFIED",
+  "reporting_omissions": "The L8-3B and L8-3C reports omitted the dataset mounts and the guard's dataset reads. No finding about intent is made.",
+  "protocol_violation_status_of_earlier_runs": "Not every historical guard invocation has been independently established as a protocol violation; the authorization in force for each was not reconstructed.",
+  "preservation_hash_reconciliation": {
+   "checkpoint": "L8-3DI",
+   "tracked_inventory_files_hashed": 16,
+   "preservation_runs": 3,
+   "pending_classification_files": 12,
+   "proposed_approved_files": 4,
+   "implied_operations_on_pending": 36,
+   "implied_operations_on_proposed": 12,
+   "implied_operations_total": 48,
+   "superseded_reported_total": 32,
+   "correction_basis": "Execution records: the third run was inside the evidence-archive command, where only its final success line was shown. Not direct access monitoring.",
+   "not_comparable": "These are hashes of non-dataset inventory files, counted separately from guard runs; they must not be added to the 57 implied dataset hash operations or described as dataset reads.",
+   "earlier_preservation_checks": "Not included in the 48. Earlier baselines, including L8-3D and L8-3DV, also hashed tracked inventory files; their authorization status was not reassessed.",
+   "authorization": "The later classification approval is prospective and does not authorize this earlier access. The hashes do not establish dataset or holdout-row access."
+  }
+ },
+ "corrections_to_committed_evidence": [
+  {
+   "file": "verification/level8/operational_acceptance.json",
+   "committed_sha256": "f1a1a1358446d4c3900e5a8ed2b68668d5609cc80e804b331eed103e5f9b3e9c",
+   "file_edited": false,
+   "history_amended": false,
+   "statement_concerned": "benchmark containers mounted no repository data",
+   "correction": "The statement is insufficiently scoped: it is inaccurate if the serial-latency verification container counts as a benchmark container, because that container mounted the repository with only the holdout and train.csv covered.",
+   "level7_qualification": "The file's Level 7 mount note names train.csv only. That suite covered only the holdout, so the raw, cleaned and train datasets were mounted, and its strict guard hashed them."
+  }
+ ],
+ "historical_operational_results": {
+  "L8-2D": "FAIL",
+  "L8-2DF": "FAIL",
+  "L8-2DS": "NOT VERIFIED",
+  "L8-2DSV": "PASS",
+  "L8-2DA": "FAIL",
+  "L8-2DAV": "FAIL",
+  "full_operational_acceptance": "FAIL",
+  "comparison_mixed_load_performance": "NOT VERIFIED",
+  "note": "The comparison implementation changed the dispatcher; earlier operational measurements are not verified performance guarantees for it.",
+  "production_readiness_claim": false
+ },
+ "limitations": {
+  "historical_dataset_non_access": "NOT VERIFIED",
+  "historical_dataset_content_preservation": "NOT VERIFIED",
+  "possible_holdout_row_access_through_upstream_or_derived_files": "NOT VERIFIED",
+  "holdout_independence": "not restored",
+  "model_contamination_from_these_incidents": "NOT ESTABLISHED",
+  "independent_model_generalization": "NOT ESTABLISHED",
+  "medical_validity": "NOT ESTABLISHED",
+  "notes": [
+   "Unchanged model hashes do not establish the absence of information leakage.",
+   "Successful synthetic verification does not restore holdout independence."
+  ]
+ },
+ "technical_debt": [
+  "Worker metadata is not explicitly generation-bound.",
+  "The active-slot counter is not a complete measure of process ownership.",
+  "The comparison handler does not bound slow-upload duration.",
+  "Framework-generated errors fall outside the handler-specific no-store guarantee.",
+  "Temporary-file resource warnings (test-fixture cleanup debt).",
+  "Starlette dependency deprecation warnings.",
+  "HTTPX transitive dependencies are not hash-locked.",
+  "Some historical preflight and pre-test evidence is missing (including L8-3C pre-test hashes and L8-3D preflight output).",
+  "Some historical scratch-script versions were overwritten.",
+  "Linux compatibility of the isolated verifier is unverified.",
+  "Production Level 8 packaging is not implemented.",
+  "The historical full-content guard remains suspended."
+ ],
+ "private_evidence": {
+  "retention": "local only; backup status NOT VERIFIED; not uploaded",
+  "freshly_reverified_for_this_document": false,
+  "archives": [
+   {
+    "id": "L8-3D",
+    "entries": 68,
+    "inventory_sha256": "101caf140bde13d09aed1ef00bf2af98e0fff41041b92e45d3712ef113c83365"
+   },
+   {
+    "id": "L8-3DI",
+    "entries": 37,
+    "inventory_sha256": "b73f5997547f239fc9e4046af693277a6939e846e52b3fbb7acfb84ffd08f5a2"
+   },
+   {
+    "id": "L8-3DIV",
+    "entries": 30,
+    "inventory_sha256": "a427392de76208b89e5b43691c2e1a72b6435f62f3645613a5057d2139800983"
+   },
+   {
+    "id": "L8-2DF",
+    "entries": 97,
+    "inventory_sha256": "56cf0713ee420cfb5b037ad5c909eb183ff427de48bd35ab10f12667bd66fbd0"
+   },
+   {
+    "id": "L8-2DS",
+    "entries": 127,
+    "inventory_sha256": "853684f4c55a4a798576a7d33a3d5655de708bd219acf88b6e7d2fb6770a47d3"
+   },
+   {
+    "id": "L8-2DSV",
+    "entries": 34,
+    "inventory_sha256": "4880741dd7dc52e8085ed734a76578751fc4fb211e59b9a8f112bdf828f9e61a"
+   },
+   {
+    "id": "L8-2DA",
+    "entries": 123,
+    "inventory_sha256": "c9ca74ecfc14b1a08adc6e4c40b547699babe018df18282aa339a2b149ef9396"
+   },
+   {
+    "id": "L8-2DAV",
+    "entries": 78,
+    "inventory_sha256": "5c88b14a9828d52fb18dfabc4b73b1ed2bec0c91d88a38998592207edeb9db85"
+   }
+  ],
+  "reconciliation_record": {
+   "id": "L8-3DV",
+   "files": 1,
+   "record_sha256": "9598faf332add1848ea67fe872674d96c48fc91483581ad54926f2295b41a127"
+  }
+ },
+ "future_verification_procedure": [
+  "Classify every path explicitly before content access.",
+  "Use exact approved source allowlists.",
+  "Make independent regular-file copies.",
+  "Use descriptor-based no-follow access.",
+  "Validate the exact staging inventory.",
+  "Include no datasets or excluded reports.",
+  "Pin the historical inventory and the reviewed classification.",
+  "Keep staging read-only during verification.",
+  "Select test modules explicitly; never use broad discovery while the historical guard is present.",
+  "Never mount the repository root.",
+  "Inspect container mounts before startup.",
+  "Report only the verified scope.",
+  "Clean up and check preservation.",
+  "Linux compatibility and packaging integration are L8-4 work."
+ ]
+}

@@ -90,6 +90,9 @@ class Outcome:
     explanation: dict[str, Any] | None = None
     code: str | None = None
     violations: tuple[dict[str, Any], ...] = ()
+    # Successes only: the generation of the handle that returned this result, recorded after the
+    # message's generation and request id were verified. Never read from the current generation.
+    generation: int | None = None
 
 
 def _error(code: str, violations: tuple = ()) -> Outcome:
@@ -363,6 +366,52 @@ class Dispatcher:
             self._note_high_water()
         self._waker.set()
         return job
+
+    def submit_comparison(self, original: Mapping[str, Any], modified: Mapping[str, Any]) -> tuple[Job, ...]:
+        """Admit the evaluations of one comparison, all or none. Both inputs are validated first. Inputs
+        whose validated values are exactly equal need one evaluation; otherwise two jobs are returned
+        (original, modified). They share one admission time and deadline, are adjacent in FIFO order, and
+        each counts as one evaluation against the capacity limits. Raises like ``submit``.
+
+        Accounting: ``admitted`` stays per evaluation. A refused comparison counts once in
+        ``comparison_requests_rejected_*`` and never in the single-evaluation ``rejected_*`` counters.
+
+        Because a worker failure drains every queued job in the same step that ends the active one, two
+        successes of one comparison cannot span a replacement; each success also records its generation."""
+        first = ExplanationEngine.validate_payload(original)
+        second = ExplanationEngine.validate_payload(modified)
+        payloads = (first,) if first == second else (first, second)
+        now = self._clock.now()
+        with self._lock:
+            if self._state != READY:
+                self._counters["comparison_requests_rejected_unavailable"] += 1
+                raise AdmissionRejected(CODE_UNAVAILABLE)
+            take_active = self._active is None and not self._queue
+            queued_after = len(self._queue) + len(payloads) - (1 if take_active else 0)
+            admitted_after = queued_after + (1 if self._active is not None or take_active else 0)
+            if queued_after > self._cfg.max_waiting or admitted_after > self._cfg.max_waiting + 1:
+                self._counters["comparison_requests_rejected_overloaded"] += 1
+                raise AdmissionRejected(CODE_OVERLOADED)
+            # everything that can fail happens before any state changes
+            jobs = tuple(Job(payload, now, now + self._cfg.request_deadline, req_id=next(self._ids))
+                         for payload in payloads)
+            waiting = jobs[1:] if take_active else jobs
+            queued_before = len(self._queue)
+            try:
+                self._queue.extend(waiting)
+            except BaseException:
+                while len(self._queue) > queued_before:
+                    self._queue.pop()
+                raise
+            if take_active:
+                jobs[0].state = RESERVED
+                self._active = jobs[0]
+            self._counters["admitted"] += len(jobs)
+            self._counters["comparison_requests_admitted"] += 1
+            self._counters["comparison_evaluations_admitted"] += len(jobs)
+            self._note_high_water()
+        self._waker.set()
+        return jobs
 
     def cancel(self, job: Job) -> bool:
         """Client cancellation. Queued: released immediately. Active: slot stays reserved until
@@ -785,7 +834,8 @@ class Dispatcher:
             return True
         exec_deadline = min(job.deadline, now + self._cfg.exec_timeout)
         with self._lock:
-            job.req_id = next(self._ids)
+            if not job.req_id:  # comparison jobs received theirs at admission
+                job.req_id = next(self._ids)
             job.exec_deadline = exec_deadline
             job.state = EXECUTING
         message = {"t": "explain", "gen": handle.generation, "id": job.req_id, "payload": job.payload}
@@ -824,7 +874,8 @@ class Dispatcher:
             self._fail_worker("protocol_mismatch", CODE_UNAVAILABLE)
             return False
         if kind == "result":
-            self._finish(job, Outcome("result", explanation=message["explanation"]), "completed")
+            self._finish(job, Outcome("result", explanation=message["explanation"],
+                                      generation=handle.generation), "completed")
             return True
         code = message["code"]
         if code == worker_module.CODE_INTERNAL:
@@ -883,7 +934,8 @@ class Dispatcher:
         if message["gen"] != handle.generation:
             return False
         if message["t"] == "result" and message.get("id") == job.req_id:
-            self._finish(job, Outcome("result", explanation=message["explanation"]), "completed")
+            self._finish(job, Outcome("result", explanation=message["explanation"],
+                                      generation=handle.generation), "completed")
             return True
         if message["t"] == "error" and message.get("id") == job.req_id \
                 and message["code"] != worker_module.CODE_INTERNAL:
